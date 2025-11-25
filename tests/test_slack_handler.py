@@ -18,3 +18,4 @@ def test_message_processor_initialization(message_processor):
     assert message_processor is not None
     assert message_processor.prompt_builder is not None
 
+

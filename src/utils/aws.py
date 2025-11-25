@@ -115,3 +115,4 @@ def load_personality_profile_from_s3(s3_key: str = "profiles/personality_profile
         return json.loads(content.decode("utf-8"))
     return None
 
+

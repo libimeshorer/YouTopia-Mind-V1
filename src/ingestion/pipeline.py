@@ -166,3 +166,4 @@ class IngestionPipeline:
             logger.error("Error ingesting document from bytes", error=str(e))
             return 0
 
+

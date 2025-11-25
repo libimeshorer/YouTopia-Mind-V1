@@ -48,3 +48,4 @@ def test_rag_retriever(rag_retriever):
     context = rag_retriever.format_context(results)
     assert len(context) > 0
 
+

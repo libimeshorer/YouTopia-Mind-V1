@@ -80,3 +80,4 @@ class RAGRetriever:
         results = self.retrieve(query, top_k=top_k, filter_metadata=filter_metadata)
         return self.format_context(results)
 
+

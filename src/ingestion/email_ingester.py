@@ -181,3 +181,4 @@ class EmailIngester:
             logger.error("Error ingesting from IMAP", error=str(e))
             raise
 
+

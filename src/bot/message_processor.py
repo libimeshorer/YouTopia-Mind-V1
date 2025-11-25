@@ -78,3 +78,4 @@ class MessageProcessor:
             logger.error("Error processing message stream", error=str(e))
             return None
 
+

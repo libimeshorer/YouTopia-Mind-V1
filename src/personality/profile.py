@@ -40,3 +40,4 @@ class PersonalityProfile(BaseModel):
         """Update the updated_at timestamp"""
         self.updated_at = datetime.now()
 
+

@@ -157,3 +157,4 @@ class VectorStore:
             logger.error("Error resetting vector store", error=str(e))
             return False
 
+

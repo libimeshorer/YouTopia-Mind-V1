@@ -84,3 +84,4 @@ def load_settings() -> Settings:
 # Global settings instance
 settings = load_settings()
 
+

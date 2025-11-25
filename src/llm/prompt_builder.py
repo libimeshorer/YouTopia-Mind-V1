@@ -152,3 +152,4 @@ Please respond in your typical communication style, using the knowledge from the
             logger.info("Response generated", usage=usage_stats)
             return response.choices[0].message.content
 
+
