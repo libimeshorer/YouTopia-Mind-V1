@@ -2,7 +2,6 @@
 
 from typing import List, Dict, Optional
 from pathlib import Path
-import io
 
 from src.utils.logging import get_logger
 from src.utils.aws import S3Client
@@ -27,6 +26,10 @@ class DocumentIngester:
             for page in reader.pages:
                 text += page.extract_text() + "\n"
             return text
+        except ImportError as exc:
+            raise ImportError(
+                "pypdf is required for PDF ingestion. Install with `pip install pypdf`."
+            ) from exc
         except Exception as e:
             logger.error("Error extracting text from PDF", error=str(e), file_path=file_path)
             raise
@@ -34,10 +37,14 @@ class DocumentIngester:
     def extract_text_from_docx(self, file_path: str) -> str:
         """Extract text from DOCX file"""
         try:
-            from docx import Document
+            from docx import Document  # type: ignore[import-not-found]
             doc = Document(file_path)
             text = "\n".join([paragraph.text for paragraph in doc.paragraphs])
             return text
+        except ImportError as exc:
+            raise ImportError(
+                "python-docx is required for DOCX ingestion. Install with `pip install python-docx`."
+            ) from exc
         except Exception as e:
             logger.error("Error extracting text from DOCX", error=str(e), file_path=file_path)
             raise

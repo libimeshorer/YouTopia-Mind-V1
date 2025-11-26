@@ -4,8 +4,6 @@ import boto3
 from botocore.exceptions import ClientError
 from typing import Optional, BinaryIO
 import json
-from pathlib import Path
-
 from src.config.settings import settings
 from src.utils.logging import get_logger
 

@@ -1,9 +1,7 @@
 """Slack bot event handlers"""
 
-import os
 from slack_bolt import App
 from slack_bolt.adapter.aws_lambda import SlackRequestHandler
-from slack_sdk.errors import SlackApiError
 
 from src.config.settings import settings
 from src.bot.message_processor import MessageProcessor

@@ -1,9 +1,7 @@
 """Tests for ingestion pipeline"""
 
 import pytest
-import tempfile
-from pathlib import Path
-from src.ingestion.document_ingester import DocumentIngester
+
 from src.ingestion.chunking import TextChunker
 
 

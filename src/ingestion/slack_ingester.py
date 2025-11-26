@@ -2,9 +2,14 @@
 
 from typing import List, Dict, Optional
 from datetime import datetime
-from slack_sdk import WebClient
-from slack_sdk.errors import SlackApiError
-from src.config.settings import settings
+
+try:
+    from slack_sdk import WebClient
+    from slack_sdk.errors import SlackApiError
+except ImportError as exc:  # pragma: no cover - environment validation
+    raise ImportError(
+        "slack_sdk is required for Slack ingestion. Install with `pip install slack-sdk`."
+    ) from exc
 
 from src.config.settings import settings
 from src.utils.logging import get_logger

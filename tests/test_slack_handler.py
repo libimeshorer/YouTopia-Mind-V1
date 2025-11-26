@@ -1,7 +1,8 @@
 """Tests for Slack handler"""
 
 import pytest
-from unittest.mock import Mock, patch
+from unittest.mock import patch
+
 from src.bot.message_processor import MessageProcessor
 
 

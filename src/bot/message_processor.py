@@ -1,9 +1,6 @@
 """Message processor for handling Slack messages and generating responses"""
 
 from typing import Optional
-from slack_bolt import App
-from slack_sdk.errors import SlackApiError
-
 from src.llm.prompt_builder import PromptBuilder
 from src.personality.profile import PersonalityProfile
 from src.personality.style_analyzer import StyleAnalyzer

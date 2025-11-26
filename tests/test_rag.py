@@ -1,9 +1,9 @@
 """Tests for RAG system"""
 
-import pytest
+import pytest  # type: ignore[import-not-found]
+
 from src.rag.vector_store import VectorStore
 from src.rag.retriever import RAGRetriever
-from src.rag.embeddings import EmbeddingService
 
 
 @pytest.fixture
