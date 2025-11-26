@@ -64,4 +64,12 @@ secrets/
 *.pem
 *.key
 
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/.vercel/
+frontend/.env.local
+frontend/.env.production.local
+
 
