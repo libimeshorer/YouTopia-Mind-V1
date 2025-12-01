@@ -4,6 +4,7 @@ import { Mail } from "lucide-react";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import youtopiaLogo from "@/assets/logos/youtopia-crystal-logo.png";
+import Header from "@/components/layout/Header";
 
 const Index = () => {
   const [email, setEmail] = useState("");
@@ -22,7 +23,8 @@ const Index = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-hero">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-hero relative">
+      <Header />
       <div className="container mx-auto px-6 py-12">
         <div className="max-w-4xl mx-auto text-center space-y-16">
           {/* Logo */}
