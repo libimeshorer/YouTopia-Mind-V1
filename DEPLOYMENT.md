@@ -1,6 +1,6 @@
 # Deployment Guide
 
-## AWS Lambda Deployment
+## AWS Lambda Deployment guide
 
 ### Prerequisites
 
