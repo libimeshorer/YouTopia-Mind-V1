@@ -137,6 +137,43 @@ In Clerk Dashboard → Paths:
 - ✅ Check the **build logs** to verify the variable is available during build
 - ✅ If build logs show the variable is missing, it won't work even if it's set in Vercel settings
 
+### If Variable is Set But Not Available During Build
+
+**If you see in build logs: "VITE_CLERK_PUBLISHABLE_KEY is NOT available during build" but you've confirmed it's set in Vercel:**
+
+1. **Double-check the variable name:**
+   - Go to Vercel → Settings → Environment Variables
+   - Verify it's exactly `VITE_CLERK_PUBLISHABLE_KEY` (no typos, correct case)
+   - Look for any trailing spaces in the variable name
+
+2. **Verify environment selection:**
+   - Make sure the variable is checked for **Production**, **Preview**, AND **Development**
+   - Click "Edit" on the variable to see which environments are selected
+   - If you're viewing a Preview deployment, make sure "Preview" is selected
+
+3. **Check Root Directory setting:**
+   - Go to Settings → General → Root Directory
+   - If Root Directory is set to `frontend`, that's correct
+   - Environment variables should still work with a root directory set
+
+4. **Try redeploying with cache cleared:**
+   - Go to Deployments → Latest deployment
+   - Click the three dots (⋯) → Redeploy
+   - **Check the "Clear Build Cache" option** before redeploying
+   - This ensures a completely fresh build
+
+5. **Verify in build logs what VITE_ variables are available:**
+   - Look for the log line: "All VITE_* env vars: [...]"
+   - This shows all environment variables that start with `VITE_`
+   - If `VITE_CLERK_PUBLISHABLE_KEY` is not in that list, it's not being passed to the build
+
+6. **Last resort - Delete and re-add the variable:**
+   - In Vercel → Settings → Environment Variables
+   - Delete `VITE_CLERK_PUBLISHABLE_KEY`
+   - Add it again with the exact same name and value
+   - Make sure all environments (Production, Preview, Development) are selected
+   - Redeploy with cache cleared
+
 ## What's Been Implemented
 
 ✅ Sign In page (`/sign-in`) with email and Google
