@@ -1,6 +1,6 @@
 import { SignedIn, SignedOut, UserButton, useAuth } from "@clerk/clerk-react";
 import { Button } from "@/components/ui/button";
-import { LogIn } from "lucide-react";
+import { LogIn, UserPlus } from "lucide-react";
 import { Link } from "react-router-dom";
 import { ROUTES } from "@/constants/routes";
 import { clerkConfig } from "@/lib/clerk";
@@ -16,6 +16,19 @@ const SignInButton = () => (
     >
       <LogIn className="w-4 h-4 mr-2" />
       Sign In
+    </Button>
+  </Link>
+);
+
+// Sign Up button component (reusable)
+const SignUpButton = () => (
+  <Link to={ROUTES.SIGN_UP}>
+    <Button
+      size="sm"
+      className="bg-gradient-primary hover:shadow-glow transition-all duration-300"
+    >
+      <UserPlus className="w-4 h-4 mr-2" />
+      Sign Up
     </Button>
   </Link>
 );
@@ -51,9 +64,14 @@ const ClerkHeader = () => {
   if (showFallback || !isLoaded) {
     return (
       <header className="absolute top-0 left-0 right-0 z-50 p-6">
-        <div className="container mx-auto flex justify-end items-center">
-          {!isLoaded && <div className="w-20 h-8" />}
-          {showFallback && <SignInButton />}
+        <div className="container mx-auto flex justify-end items-center gap-3">
+          {!isLoaded && <div className="w-40 h-8" />}
+          {showFallback && (
+            <>
+              <SignInButton />
+              <SignUpButton />
+            </>
+          )}
         </div>
       </header>
     );
@@ -61,9 +79,10 @@ const ClerkHeader = () => {
 
   return (
     <header className="absolute top-0 left-0 right-0 z-50 p-6">
-      <div className="container mx-auto flex justify-end items-center">
+      <div className="container mx-auto flex justify-end items-center gap-3">
         <SignedOut>
           <SignInButton />
+          <SignUpButton />
         </SignedOut>
         <SignedIn>
           <UserButton
@@ -89,8 +108,9 @@ const FallbackHeader = () => {
 
   return (
     <header className="absolute top-0 left-0 right-0 z-50 p-6">
-      <div className="container mx-auto flex justify-end items-center">
+      <div className="container mx-auto flex justify-end items-center gap-3">
         <SignInButton />
+        <SignUpButton />
       </div>
     </header>
   );
