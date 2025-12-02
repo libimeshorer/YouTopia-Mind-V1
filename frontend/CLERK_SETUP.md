@@ -174,6 +174,21 @@ In Clerk Dashboard → Paths:
    - Make sure all environments (Production, Preview, Development) are selected
    - Redeploy with cache cleared
 
+7. **If variable is set but still not appearing (Vercel sync issue):**
+   - This is a known Vercel issue where variables don't sync properly
+   - **Solution:** Delete the variable completely, wait 30 seconds, then re-add it
+   - Make sure to copy the variable name exactly: `VITE_CLERK_PUBLISHABLE_KEY`
+   - Don't copy-paste from documentation - type it manually to avoid hidden characters
+   - After re-adding, immediately trigger a new deployment (don't wait for auto-deploy)
+   - Use "Redeploy" with "Clear Build Cache" option
+
+8. **Verify variable name has no hidden characters:**
+   - In Vercel, click "Edit" on the variable
+   - Select the entire variable name in the "Key" field
+   - Delete it and type it fresh: `VITE_CLERK_PUBLISHABLE_KEY`
+   - Sometimes copy-paste introduces invisible characters
+   - Save and redeploy
+
 ## What's Been Implemented
 
 ✅ Sign In page (`/sign-in`) with email and Google
