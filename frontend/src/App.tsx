@@ -16,34 +16,52 @@ import ProtectedRoute from "./components/layout/ProtectedRoute";
 
 const queryClient = new QueryClient();
 
-const App = () => (
-  <ClerkProvider publishableKey={clerkConfig.publishableKey}>
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
-          <Routes>
-            <Route path="/" element={<Index />} />
-            <Route path="/process" element={<Process />} />
-            <Route path="/demo" element={<Demo />} />
-            <Route path="/sign-in" element={<SignIn />} />
-            <Route path="/sign-up" element={<SignUp />} />
-            <Route
-              path="/dashboard"
-              element={
-                <ProtectedRoute>
-                  <Dashboard />
-                </ProtectedRoute>
-              }
-            />
-            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </BrowserRouter>
-      </TooltipProvider>
-    </QueryClientProvider>
-  </ClerkProvider>
+// Main app content (without ClerkProvider wrapper)
+const AppContent = () => (
+  <QueryClientProvider client={queryClient}>
+    <TooltipProvider>
+      <Toaster />
+      <Sonner />
+      <BrowserRouter>
+        <Routes>
+          <Route path="/" element={<Index />} />
+          <Route path="/process" element={<Process />} />
+          <Route path="/demo" element={<Demo />} />
+          <Route path="/sign-in" element={<SignIn />} />
+          <Route path="/sign-up" element={<SignUp />} />
+          <Route
+            path="/dashboard"
+            element={
+              <ProtectedRoute>
+                <Dashboard />
+              </ProtectedRoute>
+            }
+          />
+          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </BrowserRouter>
+    </TooltipProvider>
+  </QueryClientProvider>
 );
+
+const App = () => {
+  // Only wrap with ClerkProvider if Clerk is properly configured
+  // This prevents the app from crashing when publishableKey is missing
+  if (clerkConfig.isConfigured && clerkConfig.publishableKey) {
+    return (
+      <ClerkProvider publishableKey={clerkConfig.publishableKey}>
+        <AppContent />
+      </ClerkProvider>
+    );
+  }
+
+  // Render app without ClerkProvider when not configured
+  // The Header component will show fallback Sign In button
+  console.warn(
+    "[App] Clerk not configured. App will run without authentication features."
+  );
+  return <AppContent />;
+};
 
 export default App;

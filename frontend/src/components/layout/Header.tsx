@@ -6,30 +6,31 @@ import { ROUTES } from "@/constants/routes";
 import { clerkConfig } from "@/lib/clerk";
 import { useEffect, useState } from "react";
 
-const Header = () => {
-  const [showFallback, setShowFallback] = useState(!clerkConfig.isConfigured);
+// Sign In button component (reusable)
+const SignInButton = () => (
+  <Link to={ROUTES.SIGN_IN}>
+    <Button
+      variant="outline"
+      size="sm"
+      className="bg-card/80 backdrop-blur-sm border-border/50 hover:bg-card hover:border-primary/30"
+    >
+      <LogIn className="w-4 h-4 mr-2" />
+      Sign In
+    </Button>
+  </Link>
+);
 
-  // Always call useAuth hook unconditionally (React rules)
-  // If Clerk isn't configured, ClerkProvider will still provide a context
+// Header with Clerk integration (only used when ClerkProvider is present)
+const ClerkHeader = () => {
   const auth = useAuth();
   const isLoaded = auth?.isLoaded ?? false;
   const isSignedIn = auth?.isSignedIn ?? false;
+  const [showFallback, setShowFallback] = useState(false);
 
   useEffect(() => {
-    // Check if Clerk is properly configured
-    if (!clerkConfig.isConfigured) {
-      console.warn(
-        "[Header] Clerk is not configured. Showing fallback Sign In button."
-      );
-      setShowFallback(true);
-      return;
-    }
-
-    // If Clerk is configured, wait for it to load
     if (isLoaded) {
       console.log("[Header] Clerk initialized successfully", {
         isSignedIn,
-        isConfigured: clerkConfig.isConfigured,
       });
       setShowFallback(false);
     } else {
@@ -47,51 +48,70 @@ const Header = () => {
     }
   }, [isLoaded, isSignedIn]);
 
-  // Sign In button component (reusable)
-  const SignInButton = () => (
-    <Link to={ROUTES.SIGN_IN}>
-      <Button
-        variant="outline"
-        size="sm"
-        className="bg-card/80 backdrop-blur-sm border-border/50 hover:bg-card hover:border-primary/30"
-      >
-        <LogIn className="w-4 h-4 mr-2" />
-        Sign In
-      </Button>
-    </Link>
-  );
+  if (showFallback || !isLoaded) {
+    return (
+      <header className="absolute top-0 left-0 right-0 z-50 p-6">
+        <div className="container mx-auto flex justify-end items-center">
+          {!isLoaded && <div className="w-20 h-8" />}
+          {showFallback && <SignInButton />}
+        </div>
+      </header>
+    );
+  }
 
   return (
     <header className="absolute top-0 left-0 right-0 z-50 p-6">
       <div className="container mx-auto flex justify-end items-center">
-        {/* Fallback: Show Sign In button if Clerk isn't configured or failed to load */}
-        {showFallback && <SignInButton />}
-
-        {/* Clerk-based rendering (only if Clerk is configured and loaded) */}
-        {!showFallback && clerkConfig.isConfigured && (
-          <>
-            <SignedOut>
-              <SignInButton />
-            </SignedOut>
-            <SignedIn>
-              <UserButton
-                appearance={{
-                  elements: {
-                    avatarBox: "w-10 h-10",
-                  },
-                }}
-              />
-            </SignedIn>
-          </>
-        )}
-
-        {/* Loading state: Show placeholder while Clerk loads (only if configured) */}
-        {!showFallback && !isLoaded && clerkConfig.isConfigured && (
-          <div className="w-20 h-8" />
-        )}
+        <SignedOut>
+          <SignInButton />
+        </SignedOut>
+        <SignedIn>
+          <UserButton
+            appearance={{
+              elements: {
+                avatarBox: "w-10 h-10",
+              },
+            }}
+          />
+        </SignedIn>
       </div>
     </header>
   );
+};
+
+// Fallback header without Clerk (used when ClerkProvider is not present)
+const FallbackHeader = () => {
+  useEffect(() => {
+    console.warn(
+      "[Header] Clerk is not configured. Showing fallback Sign In button."
+    );
+  }, []);
+
+  return (
+    <header className="absolute top-0 left-0 right-0 z-50 p-6">
+      <div className="container mx-auto flex justify-end items-center">
+        <SignInButton />
+      </div>
+    </header>
+  );
+};
+
+// Main Header component - conditionally renders based on Clerk configuration
+// Note: ClerkHeader uses useAuth() which requires ClerkProvider to be present
+// If App.tsx doesn't render ClerkProvider (when Clerk not configured),
+// we must use FallbackHeader instead
+const Header = () => {
+  // Only use ClerkHeader if Clerk is configured
+  // App.tsx will conditionally render ClerkProvider based on clerkConfig.isConfigured
+  // So if isConfigured is true, ClerkProvider should be present
+  if (clerkConfig.isConfigured && clerkConfig.publishableKey) {
+    // ClerkProvider should be present (rendered by App.tsx)
+    // ClerkHeader will use useAuth() which requires ClerkProvider
+    return <ClerkHeader />;
+  }
+
+  // Clerk not configured, use fallback (no Clerk hooks)
+  return <FallbackHeader />;
 };
 
 export default Header;
