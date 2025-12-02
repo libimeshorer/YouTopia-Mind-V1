@@ -61,6 +61,82 @@ In Clerk Dashboard → Paths:
 - **Sign-in URL:** `/sign-in`
 - **Sign-up URL:** `/sign-up`
 
+## Step 7: Deploy to Vercel
+
+### Setting Environment Variables in Vercel
+
+1. **Go to Vercel Dashboard:**
+   - Navigate to your project → **Settings** → **Environment Variables**
+
+2. **Add the Environment Variable:**
+   - **Key:** `VITE_CLERK_PUBLISHABLE_KEY`
+   - **Value:** Your Clerk publishable key (e.g., `pk_test_...` or `pk_live_...`)
+   - **Environment:** Select **Production**, **Preview**, and **Development** (or at least Production and Preview)
+
+3. **Important Notes:**
+   - ✅ The variable name must be **exactly** `VITE_CLERK_PUBLISHABLE_KEY` (case-sensitive)
+   - ✅ In Vite, only variables prefixed with `VITE_` are exposed to the client
+   - ✅ After adding/modifying environment variables, you **must redeploy** for changes to take effect
+   - ✅ Vercel does NOT automatically redeploy when you change environment variables
+
+4. **Redeploy:**
+   - Go to **Deployments** tab
+   - Click the three dots (⋯) on your latest deployment
+   - Select **Redeploy** (or push a new commit to trigger a new deployment)
+
+### Troubleshooting Vercel Deployment
+
+**If you see "Authentication is not configured" error:**
+
+1. **Verify the variable is set:**
+   - Go to Settings → Environment Variables
+   - Confirm `VITE_CLERK_PUBLISHABLE_KEY` exists
+   - Check it's set for the correct environment (Production/Preview)
+
+2. **Check the variable value:**
+   - Make sure it starts with `pk_test_` or `pk_live_`
+   - No extra spaces or quotes
+   - Copy the exact value from Clerk Dashboard
+
+3. **Redeploy after setting variables:**
+   - Environment variables are only available after a new deployment
+   - Old deployments won't have new environment variables
+
+4. **Check build logs:**
+   - Go to your deployment → View build logs
+   - Look for any errors related to environment variables
+   - The build should complete successfully
+
+5. **Check Build Logs in Vercel:**
+   - Go to your deployment → View build logs
+   - Look for `[Vite Build]` messages
+   - ✅ You should see: "VITE_CLERK_PUBLISHABLE_KEY is available during build"
+   - ❌ If you see: "VITE_CLERK_PUBLISHABLE_KEY is NOT available during build", the variable isn't being passed to the build process
+   - **This is the most important check!** If the variable isn't in the build logs, it won't be in your app
+
+6. **Verify in browser console:**
+   - Open your deployed site
+   - Open browser DevTools → Console
+   - Look for `[Clerk Config]` messages
+   - If you see "VITE_CLERK_PUBLISHABLE_KEY is not set", the variable wasn't available during build
+
+7. **Common Issues:**
+   - ❌ Variable name typo (e.g., `VITE_CLERK_KEY` instead of `VITE_CLERK_PUBLISHABLE_KEY`)
+   - ❌ Variable not set for the environment you're viewing (Preview vs Production)
+   - ❌ Forgot to redeploy after adding the variable (most common!)
+   - ❌ Variable has extra spaces or quotes around the value
+   - ❌ Build cache issue - try "Redeploy" with "Clear Cache" option
+   - ❌ Variable was added AFTER the build completed - must redeploy
+
+### Important: Environment Variables are Build-Time Only
+
+⚠️ **Critical Understanding:** In Vite, `VITE_*` environment variables are embedded into your JavaScript bundle **during the build process**. This means:
+
+- ✅ The variable must be available **when Vercel runs `npm run build`**
+- ❌ Setting it after the build won't help - you must redeploy
+- ✅ Check the **build logs** to verify the variable is available during build
+- ✅ If build logs show the variable is missing, it won't work even if it's set in Vercel settings
+
 ## What's Been Implemented
 
 ✅ Sign In page (`/sign-in`) with email and Google
