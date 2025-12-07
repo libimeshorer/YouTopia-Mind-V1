@@ -21,7 +21,7 @@ const Training = () => {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  const { data: trainingStatus, isLoading: statusLoading, isError: statusError } = useQuery<TrainingStatus>({
+  const { data: trainingStatus, isLoading: statusLoading, isFetching: statusFetching, isError: statusError } = useQuery<TrainingStatus>({
     queryKey: ["trainingStatus"],
     queryFn: () => apiClient.training.status(),
     refetchInterval: 30000, // Refetch every 30 seconds
@@ -73,7 +73,8 @@ const Training = () => {
   // Use default status if API fails or is loading
   const effectiveTrainingStatus = trainingStatus || defaultTrainingStatus;
 
-  if (statusLoading) {
+  // Only show loading spinner on initial load, not during background refetches
+  if (statusLoading && !trainingStatus) {
     return (
       <div className="min-h-screen bg-background">
         <Header />
