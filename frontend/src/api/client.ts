@@ -3,6 +3,8 @@
  * TODO: Configure with actual backend URL
  */
 
+import { Document, Insight, CloneAction, Conversation, Integration, TrainingStatus } from "@/types";
+
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 export const apiClient = {
@@ -49,6 +51,103 @@ export const apiClient = {
 
   delete<T>(endpoint: string): Promise<T> {
     return this.request<T>(endpoint, { method: "DELETE" });
+  },
+
+  // Documents endpoints
+  documents: {
+    list: () => apiClient.get<Document[]>("/api/clone/documents"),
+    upload: (files: File[]) => {
+      const formData = new FormData();
+      files.forEach((file) => formData.append("files", file));
+      return fetch(`${API_BASE_URL}/api/clone/documents`, {
+        method: "POST",
+        body: formData,
+      }).then((res) => {
+        if (!res.ok) throw new Error(`API Error: ${res.statusText}`);
+        return res.json();
+      });
+    },
+    get: (id: string) => apiClient.get<Document>(`/api/clone/documents/${id}`),
+    preview: (id: string) => apiClient.get<{ url: string }>(`/api/clone/documents/${id}/preview`),
+    delete: (id: string) => apiClient.delete(`/api/clone/documents/${id}`),
+    status: (id: string) => apiClient.get<Document>(`/api/clone/documents/${id}/status`),
+    search: (query: string) => apiClient.get<Document[]>(`/api/clone/documents/search?q=${encodeURIComponent(query)}`),
+  },
+
+  // Insights endpoints
+  insights: {
+    list: () => apiClient.get<Insight[]>("/api/clone/insights"),
+    create: (content: string) => apiClient.post<Insight>("/api/clone/insights", { content }),
+    uploadVoice: (audioBlob: Blob) => {
+      const formData = new FormData();
+      formData.append("audio", audioBlob, "recording.webm");
+      return fetch(`${API_BASE_URL}/api/clone/insights/voice`, {
+        method: "POST",
+        body: formData,
+      }).then((res) => {
+        if (!res.ok) throw new Error(`API Error: ${res.statusText}`);
+        return res.json();
+      });
+    },
+    update: (id: string, content: string) => apiClient.put<Insight>(`/api/clone/insights/${id}`, { content }),
+    delete: (id: string) => apiClient.delete(`/api/clone/insights/${id}`),
+    search: (query: string) => apiClient.get<Insight[]>(`/api/clone/insights/search?q=${encodeURIComponent(query)}`),
+  },
+
+  // Integrations endpoints
+  integrations: {
+    list: () => apiClient.get<Integration[]>("/api/clone/integrations"),
+    connect: (type: string) => apiClient.post<{ authUrl: string }>(`/api/clone/integrations/${type}/connect`),
+    disconnect: (type: string) => apiClient.post(`/api/clone/integrations/${type}/disconnect`),
+    status: (type: string) => apiClient.get<Integration>(`/api/clone/integrations/${type}/status`),
+    sync: (type: string) => apiClient.post(`/api/clone/integrations/${type}/sync`),
+  },
+
+  // Activity endpoints
+  activity: {
+    actions: (filters?: { type?: string; platform?: string; startDate?: string; endDate?: string; page?: number }) => {
+      const params = new URLSearchParams();
+      if (filters?.type) params.append("type", filters.type);
+      if (filters?.platform) params.append("platform", filters.platform);
+      if (filters?.startDate) params.append("startDate", filters.startDate);
+      if (filters?.endDate) params.append("endDate", filters.endDate);
+      if (filters?.page) params.append("page", filters.page.toString());
+      return apiClient.get<{ items: CloneAction[]; total: number; page: number }>(`/api/clone/actions?${params.toString()}`);
+    },
+    conversations: (filters?: { platform?: string; participant?: string; startDate?: string; endDate?: string; page?: number }) => {
+      const params = new URLSearchParams();
+      if (filters?.platform) params.append("platform", filters.platform);
+      if (filters?.participant) params.append("participant", filters.participant);
+      if (filters?.startDate) params.append("startDate", filters.startDate);
+      if (filters?.endDate) params.append("endDate", filters.endDate);
+      if (filters?.page) params.append("page", filters.page.toString());
+      return apiClient.get<{ items: Conversation[]; total: number; page: number }>(`/api/clone/conversations?${params.toString()}`);
+    },
+    search: (query: string) => apiClient.get<{ actions: CloneAction[]; conversations: Conversation[] }>(`/api/clone/activity/search?q=${encodeURIComponent(query)}`),
+    get: (id: string) => apiClient.get<CloneAction | Conversation>(`/api/clone/activity/${id}`),
+  },
+
+  // Training endpoints
+  training: {
+    status: () => apiClient.get<TrainingStatus>("/api/clone/training/status"),
+    complete: () => apiClient.post<TrainingStatus>("/api/clone/training/complete"),
+    stats: () => apiClient.get<{ documentsCount: number; insightsCount: number; integrationsCount: number; dataPoints: number; lastActivity?: string }>("/api/clone/training/stats"),
+  },
+
+  // Voice transcription endpoints
+  transcribe: {
+    upload: (audioBlob: Blob) => {
+      const formData = new FormData();
+      formData.append("audio", audioBlob, "recording.webm");
+      return fetch(`${API_BASE_URL}/api/clone/transcribe`, {
+        method: "POST",
+        body: formData,
+      }).then((res) => {
+        if (!res.ok) throw new Error(`API Error: ${res.statusText}`);
+        return res.json();
+      });
+    },
+    status: (id: string) => apiClient.get<{ status: string; transcription?: string }>(`/api/clone/transcribe/${id}`),
   },
 };
 

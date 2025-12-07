@@ -1,10 +1,13 @@
 import { SignedIn, SignedOut, UserButton, useAuth } from "@clerk/clerk-react";
 import { Button } from "@/components/ui/button";
 import { LogIn, UserPlus } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { ROUTES } from "@/constants/routes";
 import { clerkConfig } from "@/lib/clerk";
 import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { apiClient } from "@/api/client";
+import { TrainingStatus } from "@/types";
 
 // Sign In button component (reusable)
 const SignInButton = () => (
@@ -36,9 +39,20 @@ const SignUpButton = () => (
 // Header with Clerk integration (only used when ClerkProvider is present)
 const ClerkHeader = () => {
   const auth = useAuth();
+  const location = useLocation();
   const isLoaded = auth?.isLoaded ?? false;
   const isSignedIn = auth?.isSignedIn ?? false;
   const [showFallback, setShowFallback] = useState(false);
+
+  const { data: trainingStatus } = useQuery<TrainingStatus>({
+    queryKey: ["trainingStatus"],
+    queryFn: () => apiClient.training.status(),
+    enabled: isSignedIn,
+    retry: 1,
+  });
+
+  const showTrainingLink = isSignedIn && trainingStatus && !trainingStatus.isComplete;
+  const showActivityLink = isSignedIn && trainingStatus && trainingStatus.isComplete;
 
   useEffect(() => {
     if (isLoaded) {
@@ -79,20 +93,50 @@ const ClerkHeader = () => {
 
   return (
     <header className="absolute top-0 left-0 right-0 z-50 p-6">
-      <div className="container mx-auto flex justify-end items-center gap-3">
-        <SignedOut>
-          <SignInButton />
-          <SignUpButton />
-        </SignedOut>
-        <SignedIn>
-          <UserButton
-            appearance={{
-              elements: {
-                avatarBox: "w-10 h-10",
-              },
-            }}
-          />
-        </SignedIn>
+      <div className="container mx-auto flex justify-between items-center">
+        <div className="flex items-center gap-4">
+          <SignedIn>
+            {showTrainingLink && (
+              <Link
+                to={ROUTES.TRAINING}
+                className={`text-sm font-medium transition-colors ${
+                  location.pathname === ROUTES.TRAINING
+                    ? "text-primary"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Training
+              </Link>
+            )}
+            {showActivityLink && (
+              <Link
+                to={ROUTES.ACTIVITY}
+                className={`text-sm font-medium transition-colors ${
+                  location.pathname === ROUTES.ACTIVITY
+                    ? "text-primary"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Activity
+              </Link>
+            )}
+          </SignedIn>
+        </div>
+        <div className="flex items-center gap-3">
+          <SignedOut>
+            <SignInButton />
+            <SignUpButton />
+          </SignedOut>
+          <SignedIn>
+            <UserButton
+              appearance={{
+                elements: {
+                  avatarBox: "w-10 h-10",
+                },
+              }}
+            />
+          </SignedIn>
+        </div>
       </div>
     </header>
   );
