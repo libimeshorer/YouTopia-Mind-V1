@@ -1,7 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { useUser } from "@clerk/clerk-react";
-import { useMemo } from "react";
 import Header from "@/components/layout/Header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -22,25 +21,12 @@ const Training = () => {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  // Only refetch if training is not complete - once complete, no need to keep checking
   const { data: trainingStatus, isLoading: statusLoading, isFetching: statusFetching, isError: statusError } = useQuery<TrainingStatus>({
     queryKey: ["trainingStatus"],
     queryFn: () => apiClient.training.status(),
-    // Only refetch if training is incomplete - stop refetching once complete
-    // This prevents unnecessary refetches that cause page reloads
-    refetchInterval: (query) => {
-      const data = query.state.data as TrainingStatus | undefined;
-      // If training is complete, stop refetching (return false)
-      if (data?.isComplete) {
-        return false;
-      }
-      // Otherwise refetch every 60 seconds (increased from 30 to reduce reloads)
-      return 60000;
-    },
+    staleTime: 30000, // Set a stale time to prevent constant refetching
     retry: 1,
     refetchOnWindowFocus: false,
-    // Don't refetch on mount if we have cached data to prevent initial reload
-    refetchOnMount: false,
   });
 
   const { data: stats } = useQuery({
@@ -101,20 +87,16 @@ const Training = () => {
     );
   }
 
-  // Memoize grouped integrations to prevent recalculation on every render
-  const groupedIntegrations = useMemo(
-    () =>
-      integrations.reduce(
-        (acc, integration) => {
-          if (!acc[integration.category]) {
-            acc[integration.category] = [];
-          }
-          acc[integration.category].push(integration);
-          return acc;
-        },
-        {} as Record<string, Integration[]>
-      ),
-    [integrations]
+  // Group integrations by category
+  const groupedIntegrations = integrations.reduce(
+    (acc, integration) => {
+      if (!acc[integration.category]) {
+        acc[integration.category] = [];
+      }
+      acc[integration.category].push(integration);
+      return acc;
+    },
+    {} as Record<string, Integration[]>
   );
 
   return (
