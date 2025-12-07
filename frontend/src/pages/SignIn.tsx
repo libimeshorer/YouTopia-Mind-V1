@@ -141,7 +141,7 @@ const SignIn = () => {
               routing="path"
               path="/sign-in"
               signUpUrl={ROUTES.SIGN_UP}
-              forceRedirectUrl={ROUTES.DASHBOARD}
+              forceRedirectUrl={ROUTES.TRAINING}
             />
 
             <div className="mt-6 text-center">

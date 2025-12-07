@@ -41,8 +41,10 @@ const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
     return <Navigate to={ROUTES.SIGN_IN} replace />;
   }
 
-  // If API call is still loading, show loading state (but with timeout)
-  if (statusLoading) {
+  // If API call is still loading, allow Training page to render immediately
+  // Other pages can wait, but Training should show content even while loading
+  const isTrainingPage = location.pathname === ROUTES.TRAINING;
+  if (statusLoading && !isTrainingPage) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center">
