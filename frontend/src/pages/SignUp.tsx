@@ -151,6 +151,7 @@ const SignUp = () => {
               routing="path"
               path="/sign-up"
               signInUrl={ROUTES.SIGN_IN}
+              afterSignUpUrl={ROUTES.DASHBOARD}
             />
 
             <div className="mt-6 text-center">
