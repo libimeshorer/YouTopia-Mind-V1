@@ -1,6 +1,7 @@
 import { useAuth } from "@clerk/clerk-react";
 import { Navigate, useLocation } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
+import { useMemo, useRef } from "react";
 import { ROUTES } from "@/constants/routes";
 import { apiClient } from "@/api/client";
 import { TrainingStatus } from "@/types";
@@ -12,16 +13,18 @@ interface ProtectedRouteProps {
 const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
   const { isLoaded, isSignedIn } = useAuth();
   const location = useLocation();
+  const lastRedirectPath = useRef<string | null>(null);
 
+  // Read from cache only - don't create a new query instance
+  // The Training page will handle the actual refetching
   const { data: trainingStatus, isLoading: statusLoading, isError } = useQuery<TrainingStatus>({
     queryKey: ["trainingStatus"],
     queryFn: () => apiClient.training.status(),
     enabled: isSignedIn && isLoaded,
     retry: 1,
-    // Don't refetch on window focus to prevent endless loading
     refetchOnWindowFocus: false,
-    // Set a stale time to prevent constant refetching
-    staleTime: 30000, // 30 seconds
+    refetchOnMount: false, // Don't refetch on mount, use cached data
+    staleTime: Infinity, // Use cached data, let Training page handle refetching
   });
 
   // Wait for Clerk to load
@@ -55,30 +58,55 @@ const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
     );
   }
 
-  // Redirect logic based on training status (only if we have data)
-  if (trainingStatus && !isError) {
-    const isTrainingPage = location.pathname === ROUTES.TRAINING;
-    const isActivityPage = location.pathname === ROUTES.ACTIVITY;
-    const isDashboardPage = location.pathname === ROUTES.DASHBOARD;
+  // Memoize redirect logic to prevent unnecessary re-evaluations
+  const redirectTarget = useMemo(() => {
+    if (!trainingStatus || isError) return null;
 
-    // If training incomplete and on activity page, redirect to training
+    const currentPath = location.pathname;
+    const isTrainingPage = currentPath === ROUTES.TRAINING;
+    const isActivityPage = currentPath === ROUTES.ACTIVITY;
+    const isDashboardPage = currentPath === ROUTES.DASHBOARD;
+
+    // Only redirect if we haven't already redirected to this target
+    // This prevents redirect loops when data refetches
     if (!trainingStatus.isComplete && isActivityPage) {
-      return <Navigate to={ROUTES.TRAINING} replace />;
-    }
-
-    // If training complete and on training page, redirect to activity
-    if (trainingStatus.isComplete && isTrainingPage) {
-      return <Navigate to={ROUTES.ACTIVITY} replace />;
-    }
-
-    // If on dashboard, redirect based on training status
-    if (isDashboardPage) {
-      if (trainingStatus.isComplete) {
-        return <Navigate to={ROUTES.ACTIVITY} replace />;
-      } else {
-        return <Navigate to={ROUTES.TRAINING} replace />;
+      const target = ROUTES.TRAINING;
+      if (lastRedirectPath.current !== target) {
+        lastRedirectPath.current = target;
+        return target;
       }
     }
+
+    if (trainingStatus.isComplete && isTrainingPage) {
+      const target = ROUTES.ACTIVITY;
+      if (lastRedirectPath.current !== target) {
+        lastRedirectPath.current = target;
+        return target;
+      }
+    }
+
+    if (isDashboardPage) {
+      const target = trainingStatus.isComplete ? ROUTES.ACTIVITY : ROUTES.TRAINING;
+      if (lastRedirectPath.current !== target) {
+        lastRedirectPath.current = target;
+        return target;
+      }
+    }
+
+    // Reset redirect path if we're already on the correct page
+    if (
+      (trainingStatus.isComplete && isActivityPage) ||
+      (!trainingStatus.isComplete && isTrainingPage)
+    ) {
+      lastRedirectPath.current = currentPath;
+    }
+
+    return null;
+  }, [trainingStatus, isError, location.pathname]);
+
+  // Only redirect if we have a target and it's different from current path
+  if (redirectTarget && redirectTarget !== location.pathname) {
+    return <Navigate to={redirectTarget} replace />;
   }
 
   // If API error or no training status, still render the page
