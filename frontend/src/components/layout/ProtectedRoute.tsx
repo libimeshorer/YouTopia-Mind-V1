@@ -13,14 +13,19 @@ const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
   const { isLoaded, isSignedIn } = useAuth();
   const location = useLocation();
 
-  const { data: trainingStatus, isLoading: statusLoading } = useQuery<TrainingStatus>({
+  const { data: trainingStatus, isLoading: statusLoading, isError } = useQuery<TrainingStatus>({
     queryKey: ["trainingStatus"],
     queryFn: () => apiClient.training.status(),
-    enabled: isSignedIn,
+    enabled: isSignedIn && isLoaded,
     retry: 1,
+    // Don't refetch on window focus to prevent endless loading
+    refetchOnWindowFocus: false,
+    // Set a stale time to prevent constant refetching
+    staleTime: 30000, // 30 seconds
   });
 
-  if (!isLoaded || (isSignedIn && statusLoading)) {
+  // Wait for Clerk to load
+  if (!isLoaded) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center">
@@ -31,12 +36,25 @@ const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
     );
   }
 
+  // Redirect to sign in if not authenticated
   if (!isSignedIn) {
     return <Navigate to={ROUTES.SIGN_IN} replace />;
   }
 
-  // Redirect logic based on training status
-  if (trainingStatus) {
+  // If API call is still loading, show loading state (but with timeout)
+  if (statusLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading your data...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Redirect logic based on training status (only if we have data)
+  if (trainingStatus && !isError) {
     const isTrainingPage = location.pathname === ROUTES.TRAINING;
     const isActivityPage = location.pathname === ROUTES.ACTIVITY;
     const isDashboardPage = location.pathname === ROUTES.DASHBOARD;
@@ -61,6 +79,8 @@ const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
     }
   }
 
+  // If API error or no training status, still render the page
+  // The individual pages will handle their own error states
   return <>{children}</>;
 };
 

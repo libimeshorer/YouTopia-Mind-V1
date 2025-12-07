@@ -21,10 +21,12 @@ const Training = () => {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  const { data: trainingStatus, isLoading: statusLoading } = useQuery<TrainingStatus>({
+  const { data: trainingStatus, isLoading: statusLoading, isError: statusError } = useQuery<TrainingStatus>({
     queryKey: ["trainingStatus"],
     queryFn: () => apiClient.training.status(),
     refetchInterval: 30000, // Refetch every 30 seconds
+    retry: 1,
+    refetchOnWindowFocus: false,
   });
 
   const { data: stats } = useQuery({
@@ -48,10 +50,28 @@ const Training = () => {
   });
 
   const handleComplete = () => {
-    if (trainingStatus && trainingStatus.progress >= 100) {
+    if (effectiveTrainingStatus && effectiveTrainingStatus.progress >= 100) {
       completeMutation.mutate();
     }
   };
+
+  // Create a default training status if API fails
+  const defaultTrainingStatus: TrainingStatus = {
+    isComplete: false,
+    progress: 0,
+    documentsCount: 0,
+    insightsCount: 0,
+    integrationsCount: 0,
+    thresholds: {
+      minDocuments: 5,
+      minInsights: 3,
+      minIntegrations: 1,
+    },
+    achievements: [],
+  };
+
+  // Use default status if API fails or is loading
+  const effectiveTrainingStatus = trainingStatus || defaultTrainingStatus;
 
   if (statusLoading) {
     return (
@@ -61,21 +81,6 @@ const Training = () => {
           <div className="flex items-center justify-center">
             <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
           </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (!trainingStatus) {
-    return (
-      <div className="min-h-screen bg-background">
-        <Header />
-        <div className="container mx-auto px-6 py-24">
-          <Card>
-            <CardContent className="py-8 text-center">
-              <p className="text-muted-foreground">Failed to load training status</p>
-            </CardContent>
-          </Card>
         </div>
       </div>
     );
@@ -101,18 +106,25 @@ const Training = () => {
           {/* Welcome Section */}
           <div className="mb-8">
             <h1 className="text-4xl md:text-5xl font-bold mb-4">
-              Welcome, {user?.firstName || user?.emailAddresses[0]?.emailAddress}!
+              Welcome, {user?.firstName || user?.emailAddresses?.[0]?.emailAddress?.split("@")[0] || "there"}!
             </h1>
             <p className="text-xl text-muted-foreground">
               Let's train your digital twin. Complete the steps below to get started.
             </p>
+            {statusError && (
+              <div className="mt-4 p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
+                <p className="text-sm text-yellow-600 dark:text-yellow-400">
+                  ⚠️ Unable to connect to the backend. You can still explore the interface, but data won't be saved.
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Progress Indicator */}
           <Card>
             <CardContent className="pt-6">
               <TrainingProgress
-                trainingStatus={trainingStatus}
+                trainingStatus={effectiveTrainingStatus}
                 onComplete={handleComplete}
               />
             </CardContent>
@@ -123,7 +135,7 @@ const Training = () => {
             {/* Left Column - Training Sections */}
             <div className="lg:col-span-2 space-y-8">
               {/* Section 1.1: Upload Documents */}
-              <Card data-training-section data-complete={trainingStatus.documentsCount >= trainingStatus.thresholds.minDocuments ? "true" : "false"}>
+              <Card data-training-section data-complete={effectiveTrainingStatus.documentsCount >= effectiveTrainingStatus.thresholds.minDocuments ? "true" : "false"}>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <Bot className="w-5 h-5" />
@@ -166,7 +178,7 @@ const Training = () => {
               </Card>
 
               {/* Section 1.3: Connect Integrations */}
-              <Card data-training-section data-complete={trainingStatus.integrationsCount >= trainingStatus.thresholds.minIntegrations ? "true" : "false"}>
+              <Card data-training-section data-complete={effectiveTrainingStatus.integrationsCount >= effectiveTrainingStatus.thresholds.minIntegrations ? "true" : "false"}>
                 <CardHeader>
                   <CardTitle>1.3 Connect Integrations</CardTitle>
                   <CardDescription>
@@ -225,7 +237,7 @@ const Training = () => {
               </Card>
 
               {/* Section 1.4: Record Insights */}
-              <Card data-training-section data-complete={trainingStatus.insightsCount >= trainingStatus.thresholds.minInsights ? "true" : "false"}>
+              <Card data-training-section data-complete={effectiveTrainingStatus.insightsCount >= effectiveTrainingStatus.thresholds.minInsights ? "true" : "false"}>
                 <CardHeader>
                   <CardTitle>1.4 Record Insights</CardTitle>
                   <CardDescription>
@@ -242,12 +254,12 @@ const Training = () => {
             <div className="lg:col-span-1">
               <div className="sticky top-24">
                 <StatsCards
-                  documentsCount={trainingStatus.documentsCount}
-                  insightsCount={trainingStatus.insightsCount}
-                  integrationsCount={trainingStatus.integrationsCount}
+                  documentsCount={effectiveTrainingStatus.documentsCount}
+                  insightsCount={effectiveTrainingStatus.insightsCount}
+                  integrationsCount={effectiveTrainingStatus.integrationsCount}
                   dataPoints={stats?.dataPoints || 0}
                   lastActivity={stats?.lastActivity}
-                  progress={trainingStatus.progress}
+                  progress={effectiveTrainingStatus.progress}
                 />
               </div>
             </div>

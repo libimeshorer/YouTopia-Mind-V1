@@ -1,13 +1,61 @@
 import { useUser } from "@clerk/clerk-react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Plus, Bot } from "lucide-react";
+import { Plus, Bot, Loader2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { ROUTES } from "@/constants/routes";
 import Header from "@/components/layout/Header";
+import { useQuery } from "@tanstack/react-query";
+import { apiClient } from "@/api/client";
+import { TrainingStatus } from "@/types";
 
 const Dashboard = () => {
-  const { user } = useUser();
+  const { user, isLoaded: userLoaded } = useUser();
+  const navigate = useNavigate();
+
+  const { data: trainingStatus, isLoading: statusLoading } = useQuery<TrainingStatus>({
+    queryKey: ["trainingStatus"],
+    queryFn: () => apiClient.training.status(),
+    retry: 1,
+    refetchOnWindowFocus: false,
+    staleTime: 30000,
+  });
+
+  // Get user display name safely
+  const getUserDisplayName = () => {
+    if (!userLoaded) return "there";
+    if (user?.firstName) return user.firstName;
+    if (user?.emailAddresses?.[0]?.emailAddress) {
+      return user.emailAddresses[0].emailAddress.split("@")[0];
+    }
+    return "there";
+  };
+
+  // Show loading only if user data is still loading
+  if (!userLoaded) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Header />
+        <div className="container mx-auto px-6 py-24">
+          <div className="flex items-center justify-center">
+            <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // If we have training status, redirect appropriately
+  if (trainingStatus && !statusLoading) {
+    if (trainingStatus.isComplete) {
+      navigate(ROUTES.ACTIVITY, { replace: true });
+      return null;
+    } else {
+      navigate(ROUTES.TRAINING, { replace: true });
+      return null;
+    }
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -17,7 +65,7 @@ const Dashboard = () => {
           {/* Welcome Section */}
           <div className="mb-12">
             <h1 className="text-4xl md:text-6xl font-bold mb-4">
-              Welcome back, {user?.firstName || user?.emailAddresses[0]?.emailAddress}!
+              Welcome back, {getUserDisplayName()}!
             </h1>
             <p className="text-xl text-muted-foreground">
               Manage your digital twins and create new ones
@@ -28,7 +76,11 @@ const Dashboard = () => {
           <div className="mb-8">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-2xl font-semibold">Your Clones</h2>
-              <Button size="lg" className="bg-gradient-primary hover:shadow-glow">
+              <Button 
+                size="lg" 
+                className="bg-gradient-primary hover:shadow-glow"
+                onClick={() => navigate(ROUTES.TRAINING)}
+              >
                 <Plus className="w-5 h-5 mr-2" />
                 Create New Clone
               </Button>
@@ -45,7 +97,11 @@ const Dashboard = () => {
               <p className="text-muted-foreground mb-6 max-w-md mx-auto">
                 Create your first digital twin to get started. Upload your data, connect your apps, and train your AI clone.
               </p>
-              <Button size="lg" className="bg-gradient-primary hover:shadow-glow">
+              <Button 
+                size="lg" 
+                className="bg-gradient-primary hover:shadow-glow"
+                onClick={() => navigate(ROUTES.TRAINING)}
+              >
                 <Plus className="w-5 h-5 mr-2" />
                 Create Your First Clone
               </Button>
@@ -59,7 +115,12 @@ const Dashboard = () => {
               <p className="text-sm text-muted-foreground mb-4">
                 Add PDFs, Word docs, and text files to train your clone
               </p>
-              <Button variant="outline" size="sm" className="w-full">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="w-full"
+                onClick={() => navigate(ROUTES.TRAINING)}
+              >
                 Upload Files
               </Button>
             </Card>
@@ -69,7 +130,12 @@ const Dashboard = () => {
               <p className="text-sm text-muted-foreground mb-4">
                 Link Slack, email, and other services to your clone
               </p>
-              <Button variant="outline" size="sm" className="w-full">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="w-full"
+                onClick={() => navigate(ROUTES.TRAINING)}
+              >
                 Connect Apps
               </Button>
             </Card>

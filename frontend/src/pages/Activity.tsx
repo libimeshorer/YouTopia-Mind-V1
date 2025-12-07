@@ -13,22 +13,26 @@ const Activity = () => {
   const [filters, setFilters] = useState<ActivityFiltersType>({});
   const [searchQuery, setSearchQuery] = useState("");
 
-  const { data: actionsData, isLoading: actionsLoading } = useQuery<{
+  const { data: actionsData, isLoading: actionsLoading, isError: actionsError } = useQuery<{
     items: CloneAction[];
     total: number;
     page: number;
   }>({
     queryKey: ["actions", filters],
     queryFn: () => apiClient.activity.actions(filters),
+    retry: 1,
+    refetchOnWindowFocus: false,
   });
 
-  const { data: conversationsData, isLoading: conversationsLoading } = useQuery<{
+  const { data: conversationsData, isLoading: conversationsLoading, isError: conversationsError } = useQuery<{
     items: Conversation[];
     total: number;
     page: number;
   }>({
     queryKey: ["conversations", filters],
     queryFn: () => apiClient.activity.conversations(filters),
+    retry: 1,
+    refetchOnWindowFocus: false,
   });
 
   const { data: searchResults, isLoading: searchLoading } = useQuery<{
@@ -52,11 +56,11 @@ const Activity = () => {
 
   const actions = searchQuery
     ? searchResults?.actions || []
-    : actionsData?.items || [];
+    : (actionsError ? [] : actionsData?.items || []);
 
   const conversations = searchQuery
     ? searchResults?.conversations || []
-    : conversationsData?.items || [];
+    : (conversationsError ? [] : conversationsData?.items || []);
 
   const isLoading = actionsLoading || conversationsLoading || (searchQuery && searchLoading);
 
@@ -73,6 +77,13 @@ const Activity = () => {
             <p className="text-xl text-muted-foreground">
               View what your clone has done and conversations it has had
             </p>
+            {(actionsError || conversationsError) && (
+              <div className="mt-4 p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
+                <p className="text-sm text-yellow-600 dark:text-yellow-400">
+                  ⚠️ Unable to connect to the backend. Activity data cannot be loaded.
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Filters */}
