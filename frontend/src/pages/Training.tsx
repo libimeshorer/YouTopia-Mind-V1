@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import { DocumentUpload } from "@/components/features/DocumentUpload";
 import { InsightsManager } from "@/components/features/InsightsManager";
 import { IntegrationCard } from "@/components/features/IntegrationCard";
-import { TrainingProgress } from "@/components/features/TrainingProgress";
 import { StatsCards } from "@/components/features/StatsCards";
 import { apiClient } from "@/api/client";
 import { TrainingStatus, Integration } from "@/types";
@@ -63,8 +62,8 @@ const Training = () => {
     insightsCount: 0,
     integrationsCount: 0,
     thresholds: {
-      minDocuments: 5,
-      minInsights: 3,
+      minDocuments: 1,
+      minInsights: 1,
       minIntegrations: 1,
     },
     achievements: [],
@@ -110,7 +109,7 @@ const Training = () => {
               Welcome, {user?.firstName || user?.emailAddresses?.[0]?.emailAddress?.split("@")[0] || "there"}!
             </h1>
             <p className="text-xl text-muted-foreground">
-              Let's train your digital twin. Complete the steps below to get started.
+              Let's train your clone! Complete the steps below to get started.
             </p>
             {statusError && (
               <div className="mt-4 p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
@@ -121,16 +120,6 @@ const Training = () => {
             )}
           </div>
 
-          {/* Progress Indicator */}
-          <Card>
-            <CardContent className="pt-6">
-              <TrainingProgress
-                trainingStatus={effectiveTrainingStatus}
-                onComplete={handleComplete}
-              />
-            </CardContent>
-          </Card>
-
           {/* Main Content Grid */}
           <div className="grid lg:grid-cols-3 gap-8">
             {/* Left Column - Training Sections */}
@@ -140,7 +129,7 @@ const Training = () => {
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <Bot className="w-5 h-5" />
-                    1.1 Upload Documents
+                    1. Upload Documents
                   </CardTitle>
                   <CardDescription>
                     Upload PDFs, Word documents, and text files to train your clone
@@ -160,7 +149,7 @@ const Training = () => {
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <MessageSquare className="w-5 h-5" />
-                    1.2 Agent Interviewer
+                    2. Agent Interviewer
                   </CardTitle>
                   <CardDescription>
                     Use our AI interviewer to collect initial data about you
@@ -181,7 +170,7 @@ const Training = () => {
               {/* Section 1.3: Connect Integrations */}
               <Card data-training-section data-complete={effectiveTrainingStatus.integrationsCount >= effectiveTrainingStatus.thresholds.minIntegrations ? "true" : "false"}>
                 <CardHeader>
-                  <CardTitle>1.3 Connect Integrations</CardTitle>
+                  <CardTitle>3. Connect Integrations</CardTitle>
                   <CardDescription>
                     Link your communication and productivity tools to sync data
                   </CardDescription>
@@ -240,7 +229,7 @@ const Training = () => {
               {/* Section 1.4: Record Insights */}
               <Card data-training-section data-complete={effectiveTrainingStatus.insightsCount >= effectiveTrainingStatus.thresholds.minInsights ? "true" : "false"}>
                 <CardHeader>
-                  <CardTitle>1.4 Record Insights</CardTitle>
+                  <CardTitle>1.4. Record Insights</CardTitle>
                   <CardDescription>
                     Record voice notes or add text insights about yourself
                   </CardDescription>
@@ -256,9 +245,8 @@ const Training = () => {
               <div className="sticky top-24">
                 <StatsCards
                   documentsCount={effectiveTrainingStatus.documentsCount}
-                  insightsCount={effectiveTrainingStatus.insightsCount}
                   integrationsCount={effectiveTrainingStatus.integrationsCount}
-                  dataPoints={stats?.dataPoints || 0}
+                  insightsCount={effectiveTrainingStatus.insightsCount}
                   lastActivity={stats?.lastActivity}
                   progress={effectiveTrainingStatus.progress}
                 />

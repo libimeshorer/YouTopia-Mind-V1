@@ -4,7 +4,6 @@ import {
   FileText, 
   Lightbulb, 
   Link2, 
-  BarChart3, 
   Clock, 
   Sparkles,
   TrendingUp,
@@ -17,7 +16,6 @@ interface StatsCardsProps {
   documentsCount: number;
   insightsCount: number;
   integrationsCount: number;
-  dataPoints: number;
   lastActivity?: string;
   progress: number;
 }
@@ -26,7 +24,6 @@ export const StatsCards = ({
   documentsCount,
   insightsCount,
   integrationsCount,
-  dataPoints,
   lastActivity,
   progress,
 }: StatsCardsProps) => {
@@ -76,51 +73,38 @@ export const StatsCards = ({
       icon: FileText,
       label: "Documents",
       value: documentsCount,
-      color: "text-blue-500",
-      bgColor: "bg-blue-500/10",
     },
     {
       icon: Lightbulb,
       label: "Insights",
       value: insightsCount,
-      color: "text-yellow-500",
-      bgColor: "bg-yellow-500/10",
     },
     {
       icon: Link2,
       label: "Integrations",
       value: integrationsCount,
-      color: "text-green-500",
-      bgColor: "bg-green-500/10",
-    },
-    {
-      icon: BarChart3,
-      label: "Data Points",
-      value: dataPoints.toLocaleString(),
-      color: "text-purple-500",
-      bgColor: "bg-purple-500/10",
     },
   ];
 
   return (
     <div className="space-y-6">
       {/* Main Stats Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-3 gap-4">
         {stats.map((stat, index) => {
           const Icon = stat.icon;
           return (
             <Card
               key={index}
-              className={`hover:border-primary/30 transition-all ${stat.bgColor} border-2`}
+              className="bg-gradient-to-r from-primary/10 to-primary/5 border-primary/20 border-2 hover:border-primary/30 transition-all"
             >
               <CardContent className="p-4">
-                <div className="flex items-center gap-3">
-                  <div className={`p-2 rounded-lg ${stat.bgColor}`}>
-                    <Icon className={`w-5 h-5 ${stat.color}`} />
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 sm:gap-3">
+                    <Icon className="w-4 h-4 sm:w-5 sm:h-5 text-primary flex-shrink-0" />
+                    <div className="text-xl sm:text-2xl font-bold text-muted-foreground">{stat.value}</div>
                   </div>
-                  <div>
-                    <div className="text-2xl font-bold">{stat.value}</div>
-                    <div className="text-xs text-muted-foreground">{stat.label}</div>
+                  <div className="text-xs text-muted-foreground pl-4 sm:pl-5">
+                    {stat.label}
                   </div>
                 </div>
               </CardContent>
