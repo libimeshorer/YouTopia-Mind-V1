@@ -56,16 +56,33 @@ export const apiClient = {
   // Documents endpoints
   documents: {
     list: () => apiClient.get<Document[]>("/api/clone/documents"),
-    upload: (files: File[]) => {
+    upload: async (files: File[]) => {
       const formData = new FormData();
       files.forEach((file) => formData.append("files", file));
-      return fetch(`${API_BASE_URL}/api/clone/documents`, {
-        method: "POST",
-        body: formData,
-      }).then((res) => {
-        if (!res.ok) throw new Error(`API Error: ${res.statusText}`);
-        return res.json();
-      });
+      
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/clone/documents`, {
+          method: "POST",
+          body: formData,
+          // Don't set Content-Type header - browser will set it with boundary for FormData
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text().catch(() => response.statusText);
+          throw new Error(`API Error (${response.status}): ${errorText || response.statusText}`);
+        }
+
+        return await response.json();
+      } catch (error) {
+        // Handle network errors (failed to fetch)
+        if (error instanceof TypeError && error.message.includes("fetch")) {
+          throw new Error(
+            `Failed to connect to server. Please check that the backend is running at ${API_BASE_URL}`
+          );
+        }
+        // Re-throw other errors as-is
+        throw error;
+      }
     },
     get: (id: string) => apiClient.get<Document>(`/api/clone/documents/${id}`),
     preview: (id: string) => apiClient.get<{ url: string }>(`/api/clone/documents/${id}/preview`),
@@ -78,16 +95,30 @@ export const apiClient = {
   insights: {
     list: () => apiClient.get<Insight[]>("/api/clone/insights"),
     create: (content: string) => apiClient.post<Insight>("/api/clone/insights", { content }),
-    uploadVoice: (audioBlob: Blob) => {
+    uploadVoice: async (audioBlob: Blob) => {
       const formData = new FormData();
       formData.append("audio", audioBlob, "recording.webm");
-      return fetch(`${API_BASE_URL}/api/clone/insights/voice`, {
-        method: "POST",
-        body: formData,
-      }).then((res) => {
-        if (!res.ok) throw new Error(`API Error: ${res.statusText}`);
-        return res.json();
-      });
+      
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/clone/insights/voice`, {
+          method: "POST",
+          body: formData,
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text().catch(() => response.statusText);
+          throw new Error(`API Error (${response.status}): ${errorText || response.statusText}`);
+        }
+
+        return await response.json();
+      } catch (error) {
+        if (error instanceof TypeError && error.message.includes("fetch")) {
+          throw new Error(
+            `Failed to connect to server. Please check that the backend is running at ${API_BASE_URL}`
+          );
+        }
+        throw error;
+      }
     },
     update: (id: string, content: string) => apiClient.put<Insight>(`/api/clone/insights/${id}`, { content }),
     delete: (id: string) => apiClient.delete(`/api/clone/insights/${id}`),
@@ -136,16 +167,30 @@ export const apiClient = {
 
   // Voice transcription endpoints
   transcribe: {
-    upload: (audioBlob: Blob) => {
+    upload: async (audioBlob: Blob) => {
       const formData = new FormData();
       formData.append("audio", audioBlob, "recording.webm");
-      return fetch(`${API_BASE_URL}/api/clone/transcribe`, {
-        method: "POST",
-        body: formData,
-      }).then((res) => {
-        if (!res.ok) throw new Error(`API Error: ${res.statusText}`);
-        return res.json();
-      });
+      
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/clone/transcribe`, {
+          method: "POST",
+          body: formData,
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text().catch(() => response.statusText);
+          throw new Error(`API Error (${response.status}): ${errorText || response.statusText}`);
+        }
+
+        return await response.json();
+      } catch (error) {
+        if (error instanceof TypeError && error.message.includes("fetch")) {
+          throw new Error(
+            `Failed to connect to server. Please check that the backend is running at ${API_BASE_URL}`
+          );
+        }
+        throw error;
+      }
     },
     status: (id: string) => apiClient.get<{ status: string; transcription?: string }>(`/api/clone/transcribe/${id}`),
   },

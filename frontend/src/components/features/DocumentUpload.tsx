@@ -32,9 +32,10 @@ export const DocumentUpload = ({ onUploadComplete }: DocumentUploadProps) => {
         const fileId = `${file.name}-${Date.now()}`;
         setUploadingFiles((prev) => new Map(prev.set(fileId, 0)));
 
+        let progressInterval: NodeJS.Timeout | null = null;
         try {
           // Simulate upload progress (in real implementation, this would come from the API)
-          const progressInterval = setInterval(() => {
+          progressInterval = setInterval(() => {
             setUploadingFiles((prev) => {
               const current = prev.get(fileId) || 0;
               if (current < 90) {
@@ -46,7 +47,9 @@ export const DocumentUpload = ({ onUploadComplete }: DocumentUploadProps) => {
 
           await apiClient.documents.upload([file]);
 
-          clearInterval(progressInterval);
+          if (progressInterval) {
+            clearInterval(progressInterval);
+          }
           setUploadingFiles((prev) => {
             const newMap = new Map(prev);
             newMap.set(fileId, 100);
@@ -61,7 +64,9 @@ export const DocumentUpload = ({ onUploadComplete }: DocumentUploadProps) => {
             });
           }, 1000);
         } catch (error) {
-          clearInterval(progressInterval);
+          if (progressInterval) {
+            clearInterval(progressInterval);
+          }
           setUploadingFiles((prev) => {
             const newMap = new Map(prev);
             newMap.delete(fileId);
