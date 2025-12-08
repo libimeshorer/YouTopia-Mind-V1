@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     # OpenAI Configuration
     openai_api_key: str = Field(..., env="OPENAI_API_KEY")
     openai_model: str = Field("gpt-4-turbo-preview", env="OPENAI_MODEL")
-    openai_embedding_model: str = Field("text-embedding-3-small", env="OPENAI_EMBEDDING_MODEL")
+    openai_embedding_model: str = Field("text-embedding-3-large", env="OPENAI_EMBEDDING_MODEL")
     
     # AWS Configuration
     aws_region: str = Field("us-east-1", env="AWS_REGION")
@@ -27,7 +27,17 @@ class Settings(BaseSettings):
     aws_secret_access_key: Optional[str] = Field(None, env="AWS_SECRET_ACCESS_KEY")
     s3_bucket_name: str = Field(..., env="S3_BUCKET_NAME")
     
-    # Vector Database
+    # Database
+    database_url: str = Field(..., env="DATABASE_URL")
+    
+    # Clerk Authentication
+    clerk_secret_key: str = Field(..., env="CLERK_SECRET_KEY")
+    
+    # Pinecone Vector Database
+    pinecone_api_key: str = Field(..., env="PINECONE_API_KEY")
+    pinecone_index_name: str = Field("youtopia-dev", env="PINECONE_INDEX_NAME")
+    
+    # Vector Database (legacy - kept for backward compatibility)
     chroma_db_path: str = Field("./data/chroma_db", env="CHROMA_DB_PATH")
     chroma_persist_directory: str = Field("./data/chroma_db", env="CHROMA_PERSIST_DIRECTORY")
     

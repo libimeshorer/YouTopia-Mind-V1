@@ -1,6 +1,7 @@
-"""Text chunking strategies for document ingestion"""
+"""Text chunking strategies for document ingestion using LangChain"""
 
-from typing import List, Dict
+from typing import List, Dict, Optional
+from langchain.text_splitter import RecursiveCharacterTextSplitter
 from src.config.settings import settings
 from src.utils.logging import get_logger
 
@@ -8,56 +9,54 @@ logger = get_logger(__name__)
 
 
 class TextChunker:
-    """Text chunking utility with multiple strategies"""
+    """Text chunking utility using LangChain RecursiveCharacterTextSplitter"""
     
     def __init__(
         self,
-        chunk_size: int = None,
-        chunk_overlap: int = None,
+        chunk_size: Optional[int] = None,
+        chunk_overlap: Optional[int] = None,
     ):
         self.chunk_size = chunk_size or settings.chunk_size
         self.chunk_overlap = chunk_overlap or settings.chunk_overlap
+        
+        # Initialize LangChain text splitter
+        self.splitter = RecursiveCharacterTextSplitter(
+            chunk_size=self.chunk_size,
+            chunk_overlap=self.chunk_overlap,
+            length_function=len,
+            separators=["\n\n", "\n", " ", ""],
+        )
     
-    def chunk_text(self, text: str, metadata: Dict = None) -> List[Dict]:
-        """Chunk text using sliding window approach"""
+    def chunk_text(self, text: str, metadata: Optional[Dict] = None) -> List[Dict]:
+        """Chunk text using LangChain RecursiveCharacterTextSplitter"""
         if not text or not text.strip():
             return []
         
-        chunks = []
-        start = 0
-        text_length = len(text)
-        
-        while start < text_length:
-            # Calculate end position
-            end = min(start + self.chunk_size, text_length)
+        try:
+            # Use LangChain to create documents
+            documents = self.splitter.create_documents([text])
             
-            # Extract chunk
-            chunk_text = text[start:end]
+            # Convert to our format with metadata
+            chunks = []
+            for idx, doc in enumerate(documents):
+                chunk_metadata = (metadata or {}).copy()
+                chunk_metadata.update({
+                    "chunk_index": idx,
+                    "chunking_strategy": "recursive_character",
+                })
+                
+                chunks.append({
+                    "text": doc.page_content,
+                    "metadata": {**chunk_metadata, **(doc.metadata or {})},
+                })
             
-            # Create chunk metadata
-            chunk_metadata = (metadata or {}).copy()
-            chunk_metadata.update({
-                "chunk_index": len(chunks),
-                "chunk_start": start,
-                "chunk_end": end,
-            })
-            
-            chunks.append({
-                "text": chunk_text.strip(),
-                "metadata": chunk_metadata,
-            })
-            
-            # Move start position with overlap
-            start += self.chunk_size - self.chunk_overlap
-            
-            # Prevent infinite loop
-            if start >= text_length:
-                break
-        
-        logger.debug("Text chunked", original_length=text_length, chunk_count=len(chunks))
-        return chunks
+            logger.debug("Text chunked", original_length=len(text), chunk_count=len(chunks))
+            return chunks
+        except Exception as e:
+            logger.error("Error chunking text with LangChain", error=str(e))
+            raise
     
-    def chunk_texts(self, texts: List[str], metadatas: List[Dict] = None) -> List[Dict]:
+    def chunk_texts(self, texts: List[str], metadatas: Optional[List[Dict]] = None) -> List[Dict]:
         """Chunk multiple texts"""
         all_chunks = []
         
@@ -68,64 +67,9 @@ class TextChunker:
         
         return all_chunks
     
-    def chunk_by_sentences(self, text: str, metadata: Dict = None) -> List[Dict]:
-        """Chunk text by sentences (semantic chunking)"""
-        import re
-        
-        # Split by sentence boundaries
-        sentences = re.split(r'(?<=[.!?])\s+', text)
-        
-        chunks = []
-        current_chunk = []
-        current_length = 0
-        
-        for sentence in sentences:
-            sentence_length = len(sentence)
-            
-            # If adding this sentence would exceed chunk size, save current chunk
-            if current_length + sentence_length > self.chunk_size and current_chunk:
-                chunk_text = " ".join(current_chunk)
-                chunk_metadata = (metadata or {}).copy()
-                chunk_metadata.update({
-                    "chunk_index": len(chunks),
-                    "chunking_strategy": "sentence",
-                })
-                
-                chunks.append({
-                    "text": chunk_text,
-                    "metadata": chunk_metadata,
-                })
-                
-                # Keep overlap sentences
-                overlap_sentences = []
-                overlap_length = 0
-                for s in reversed(current_chunk):
-                    if overlap_length + len(s) <= self.chunk_overlap:
-                        overlap_sentences.insert(0, s)
-                        overlap_length += len(s)
-                    else:
-                        break
-                
-                current_chunk = overlap_sentences
-                current_length = overlap_length
-            
-            current_chunk.append(sentence)
-            current_length += sentence_length
-        
-        # Add remaining chunk
-        if current_chunk:
-            chunk_text = " ".join(current_chunk)
-            chunk_metadata = (metadata or {}).copy()
-            chunk_metadata.update({
-                "chunk_index": len(chunks),
-                "chunking_strategy": "sentence",
-            })
-            chunks.append({
-                "text": chunk_text,
-                "metadata": chunk_metadata,
-            })
-        
-        logger.debug("Text chunked by sentences", original_length=len(text), chunk_count=len(chunks))
-        return chunks
+    def chunk_by_sentences(self, text: str, metadata: Optional[Dict] = None) -> List[Dict]:
+        """Chunk text by sentences (semantic chunking) - kept for backward compatibility"""
+        # Use the main chunk_text method which already handles sentence boundaries
+        return self.chunk_text(text, metadata)
 
 
