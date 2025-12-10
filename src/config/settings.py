@@ -11,9 +11,9 @@ from botocore.exceptions import ClientError
 class Settings(BaseSettings):
     """Application settings loaded from environment variables and AWS Secrets Manager"""
     
-    # Slack Configuration
-    slack_bot_token: str = Field(..., env="SLACK_BOT_TOKEN")
-    slack_signing_secret: str = Field(..., env="SLACK_SIGNING_SECRET")
+    # Slack Configuration (optional - only needed for Slack bot)
+    slack_bot_token: Optional[str] = Field(None, env="SLACK_BOT_TOKEN")
+    slack_signing_secret: Optional[str] = Field(None, env="SLACK_SIGNING_SECRET")
     slack_app_token: Optional[str] = Field(None, env="SLACK_APP_TOKEN")
     
     # OpenAI Configuration
@@ -21,17 +21,17 @@ class Settings(BaseSettings):
     openai_model: str = Field("gpt-4-turbo-preview", env="OPENAI_MODEL")
     openai_embedding_model: str = Field("text-embedding-3-large", env="OPENAI_EMBEDDING_MODEL")
     
-    # AWS Configuration
+    # AWS Configuration (optional - only needed for S3 operations)
     aws_region: str = Field("us-east-1", env="AWS_REGION")
     aws_access_key_id: Optional[str] = Field(None, env="AWS_ACCESS_KEY_ID")
     aws_secret_access_key: Optional[str] = Field(None, env="AWS_SECRET_ACCESS_KEY")
-    s3_bucket_name: str = Field(..., env="S3_BUCKET_NAME")
+    s3_bucket_name: Optional[str] = Field(None, env="S3_BUCKET_NAME")
     
-    # Database
-    database_url: str = Field(..., env="DATABASE_URL")
+    # Database (optional - only needed for database operations)
+    database_url: Optional[str] = Field(None, env="DATABASE_URL")
     
-    # Clerk Authentication
-    clerk_secret_key: str = Field(..., env="CLERK_SECRET_KEY")
+    # Clerk Authentication (optional - only needed for API server)
+    clerk_secret_key: Optional[str] = Field(None, env="CLERK_SECRET_KEY")
     
     # Pinecone Vector Database
     pinecone_api_key: str = Field(..., env="PINECONE_API_KEY")
@@ -58,6 +58,7 @@ class Settings(BaseSettings):
         env_file = ".env"
         env_file_encoding = "utf-8"
         case_sensitive = False
+        extra = "ignore"  # Ignore extra environment variables (like VITE_* for frontend)
 
 
 def get_secret_from_aws(secret_name: str, region_name: str = "us-east-1") -> Optional[dict]:
@@ -75,7 +76,19 @@ def get_secret_from_aws(secret_name: str, region_name: str = "us-east-1") -> Opt
 
 def load_settings() -> Settings:
     """Load settings from environment variables, with optional AWS Secrets Manager fallback"""
-    # Try to load from environment first
+    # Try to load .env.local first if it exists, then .env
+    try:
+        from dotenv import load_dotenv
+        # Load .env.local first (higher priority), then .env
+        if os.path.exists(".env.local"):
+            load_dotenv(".env.local", override=False)
+        if os.path.exists(".env"):
+            load_dotenv(".env", override=False)
+    except ImportError:
+        # python-dotenv not available, rely on pydantic-settings default behavior
+        pass
+    
+    # Try to load from environment
     try:
         settings = Settings()
         return settings
