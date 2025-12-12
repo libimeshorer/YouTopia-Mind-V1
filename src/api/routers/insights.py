@@ -5,8 +5,9 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 import uuid
 from datetime import datetime
-from src.api.dependencies import get_current_user, get_db
-from src.database.models import User, Insight
+from src.api.dependencies import get_clone_context, CloneContext, get_db
+from src.database.models import Insight
+from src.services.clone_data_access import CloneDataAccessService
 from src.utils.aws import S3Client
 from src.utils.logging import get_logger
 from pydantic import BaseModel
@@ -42,11 +43,14 @@ class InsightUpdate(BaseModel):
 
 @router.get("/insights", response_model=List[InsightResponse])
 async def list_insights(
-    user: User = Depends(get_current_user),
+    clone_ctx: CloneContext = Depends(get_clone_context),
     db: Session = Depends(get_db)
 ):
-    """List all insights for the current user"""
-    insights = db.query(Insight).filter(Insight.user_id == user.id).order_by(Insight.created_at.desc()).all()
+    """List all insights for the current clone"""
+    data_access = CloneDataAccessService(clone_ctx.clone_id, clone_ctx.tenant_id, db)
+    insights = data_access.get_insights()
+    # Sort by created_at descending
+    insights.sort(key=lambda x: x.created_at, reverse=True)
     return [
         InsightResponse(
             id=str(insight.id),
@@ -64,12 +68,12 @@ async def list_insights(
 @router.post("/insights", response_model=InsightResponse, status_code=status.HTTP_201_CREATED)
 async def create_insight(
     insight_data: InsightCreate,
-    user: User = Depends(get_current_user),
+    clone_ctx: CloneContext = Depends(get_clone_context),
     db: Session = Depends(get_db)
 ):
     """Create a new text insight"""
     insight = Insight(
-        user_id=user.id,
+        clone_id=clone_ctx.clone_id,
         content=insight_data.content,
         type="text",
     )
@@ -91,7 +95,7 @@ async def create_insight(
 @router.post("/insights/voice", response_model=InsightResponse, status_code=status.HTTP_201_CREATED)
 async def upload_voice_insight(
     audio: UploadFile = File(...),
-    user: User = Depends(get_current_user),
+    clone_ctx: CloneContext = Depends(get_clone_context),
     db: Session = Depends(get_db)
 ):
     """Upload a voice recording as an insight"""
@@ -105,10 +109,11 @@ async def upload_voice_insight(
     # Read audio file
     audio_bytes = await audio.read()
     
-    # Upload to S3
+    # Upload to S3 with tenant_id and clone_id in path
     s3_client = S3Client()
     insight_id = uuid.uuid4()
-    s3_key = f"insights/{user.id}/{insight_id}/audio.{audio.filename.split('.')[-1] if '.' in audio.filename else 'webm'}"
+    file_ext = audio.filename.split('.')[-1] if '.' in audio.filename else 'webm'
+    s3_key = f"insights/{clone_ctx.tenant_id}/{clone_ctx.clone_id}/{insight_id}/audio.{file_ext}"
     
     try:
         s3_client.put_object(s3_key, audio_bytes, content_type=audio.content_type)
@@ -139,7 +144,7 @@ async def upload_voice_insight(
     # Create insight record
     insight = Insight(
         id=insight_id,
-        user_id=user.id,
+        clone_id=clone_ctx.clone_id,
         content="[Voice recording]",  # Placeholder, will be updated after transcription
         type="voice",
         audio_url=audio_url,
@@ -166,7 +171,7 @@ async def upload_voice_insight(
 async def update_insight(
     insight_id: str,
     insight_data: InsightUpdate,
-    user: User = Depends(get_current_user),
+    clone_ctx: CloneContext = Depends(get_clone_context),
     db: Session = Depends(get_db)
 ):
     """Update an insight"""
@@ -178,16 +183,9 @@ async def update_insight(
             detail="Invalid insight ID format"
         )
     
-    insight = db.query(Insight).filter(
-        Insight.id == insight_uuid,
-        Insight.user_id == user.id
-    ).first()
-    
-    if not insight:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Insight not found"
-        )
+    # Validate insight access (ensures insight belongs to this clone)
+    data_access = CloneDataAccessService(clone_ctx.clone_id, clone_ctx.tenant_id, db)
+    insight = data_access.validate_insight_access(insight_uuid)
     
     insight.content = insight_data.content
     db.commit()
@@ -207,7 +205,7 @@ async def update_insight(
 @router.delete("/insights/{insight_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_insight(
     insight_id: str,
-    user: User = Depends(get_current_user),
+    clone_ctx: CloneContext = Depends(get_clone_context),
     db: Session = Depends(get_db)
 ):
     """Delete an insight"""
@@ -219,23 +217,21 @@ async def delete_insight(
             detail="Invalid insight ID format"
         )
     
-    insight = db.query(Insight).filter(
-        Insight.id == insight_uuid,
-        Insight.user_id == user.id
-    ).first()
-    
-    if not insight:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Insight not found"
-        )
+    # Validate insight access (ensures insight belongs to this clone)
+    data_access = CloneDataAccessService(clone_ctx.clone_id, clone_ctx.tenant_id, db)
+    insight = data_access.validate_insight_access(insight_uuid)
     
     # Delete audio from S3 if it's a voice insight
     if insight.audio_url:
         try:
-            # Extract S3 key from URL or store it separately
-            # For now, we'll skip S3 deletion
-            pass
+            # Extract S3 key from presigned URL or reconstruct from path
+            # S3 key format: insights/{tenant_id}/{clone_id}/{insight_id}/audio.{ext}
+            s3_key = f"insights/{clone_ctx.tenant_id}/{clone_ctx.clone_id}/{insight_id}/"
+            s3_client = S3Client()
+            # List and delete objects with this prefix
+            objects = s3_client.list_objects(s3_key)
+            for obj_key in objects:
+                s3_client.delete_object(obj_key)
         except Exception as e:
             logger.warning("Failed to delete audio from S3", error=str(e))
     
@@ -248,12 +244,13 @@ async def delete_insight(
 @router.get("/insights/search", response_model=List[InsightResponse])
 async def search_insights(
     q: str = Query(..., description="Search query"),
-    user: User = Depends(get_current_user),
+    clone_ctx: CloneContext = Depends(get_clone_context),
     db: Session = Depends(get_db)
 ):
     """Search insights by content"""
+    # Search insights filtered by clone_id
     insights = db.query(Insight).filter(
-        Insight.user_id == user.id,
+        Insight.clone_id == clone_ctx.clone_id,
         Insight.content.ilike(f"%{q}%")
     ).order_by(Insight.created_at.desc()).all()
     

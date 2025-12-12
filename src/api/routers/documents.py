@@ -5,10 +5,11 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 import uuid
 from datetime import datetime
-from src.api.dependencies import get_current_user, get_db
-from src.database.models import User, Document
+from src.api.dependencies import get_clone_context, CloneContext, get_db
+from src.database.models import Document
 from src.ingestion.document_ingester import DocumentIngester
 from src.ingestion.pipeline import IngestionPipeline
+from src.services.clone_data_access import CloneDataAccessService
 from src.utils.aws import S3Client
 from src.utils.logging import get_logger
 from pydantic import BaseModel
@@ -36,11 +37,12 @@ class DocumentResponse(BaseModel):
 
 @router.get("/documents", response_model=List[DocumentResponse])
 async def list_documents(
-    user: User = Depends(get_current_user),
+    clone_ctx: CloneContext = Depends(get_clone_context),
     db: Session = Depends(get_db)
 ):
-    """List all documents for the current user"""
-    documents = db.query(Document).filter(Document.user_id == user.id).all()
+    """List all documents for the current clone"""
+    data_access = CloneDataAccessService(clone_ctx.clone_id, clone_ctx.tenant_id, db)
+    documents = data_access.get_documents()
     return [
         DocumentResponse(
             id=str(doc.id),
@@ -59,7 +61,7 @@ async def list_documents(
 @router.post("/documents", response_model=List[DocumentResponse], status_code=status.HTTP_201_CREATED)
 async def upload_documents(
     files: List[UploadFile] = File(...),
-    user: User = Depends(get_current_user),
+    clone_ctx: CloneContext = Depends(get_clone_context),
     db: Session = Depends(get_db)
 ):
     """Upload one or more documents"""
@@ -69,9 +71,13 @@ async def upload_documents(
             detail="No files provided"
         )
     
+    data_access = CloneDataAccessService(clone_ctx.clone_id, clone_ctx.tenant_id, db)
+    vector_store = data_access.get_vector_store()
+    
     s3_client = S3Client()
     document_ingester = DocumentIngester(s3_client=s3_client)
     pipeline = IngestionPipeline(document_ingester=document_ingester)
+    pipeline.vector_store = vector_store  # Use clone-scoped vector store
     
     uploaded_documents = []
     
@@ -90,14 +96,14 @@ async def upload_documents(
             file_bytes = await file.read()
             file_size = len(file_bytes)
             
-            # Generate S3 key
+            # Generate S3 key with tenant_id and clone_id
             doc_id = uuid.uuid4()
-            s3_key = f"documents/{user.id}/{doc_id}/{file.filename}"
+            s3_key = f"documents/{clone_ctx.tenant_id}/{clone_ctx.clone_id}/{doc_id}/{file.filename}"
             
             # Create document record
             doc = Document(
                 id=doc_id,
-                user_id=user.id,
+                clone_id=clone_ctx.clone_id,
                 name=file.filename,
                 size=file_size,
                 type=file_ext or "application/octet-stream",
@@ -127,19 +133,23 @@ async def upload_documents(
                 doc.status = "processing"
                 db.commit()
                 
-                # Process document
+                # Process document with clone_id and tenant_id in metadata
                 chunks = document_ingester.ingest_from_bytes(
                     file_bytes,
                     file.filename,
                     source_name=file.filename,
-                    additional_metadata={"user_id": str(user.id), "document_id": str(doc.id)}
+                    additional_metadata={
+                        "tenant_id": str(clone_ctx.tenant_id),
+                        "clone_id": str(clone_ctx.clone_id),
+                        "document_id": str(doc.id)
+                    }
                 )
                 
-                # Store chunks in vector store
+                # Store chunks in clone-scoped vector store
                 if chunks:
                     texts = [chunk["text"] for chunk in chunks]
                     metadatas = [chunk["metadata"] for chunk in chunks]
-                    pipeline.vector_store.add_texts(texts, metadatas=metadatas)
+                    vector_store.add_texts(texts, metadatas=metadatas)
                     
                     # Update document
                     doc.status = "complete"
@@ -185,7 +195,7 @@ async def upload_documents(
 @router.get("/documents/{document_id}", response_model=DocumentResponse)
 async def get_document(
     document_id: str,
-    user: User = Depends(get_current_user),
+    clone_ctx: CloneContext = Depends(get_clone_context),
     db: Session = Depends(get_db)
 ):
     """Get document details by ID"""
@@ -197,16 +207,8 @@ async def get_document(
             detail="Invalid document ID format"
         )
     
-    doc = db.query(Document).filter(
-        Document.id == doc_uuid,
-        Document.user_id == user.id
-    ).first()
-    
-    if not doc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Document not found"
-        )
+    data_access = CloneDataAccessService(clone_ctx.clone_id, clone_ctx.tenant_id, db)
+    doc = data_access.validate_document_access(doc_uuid)
     
     return DocumentResponse(
         id=str(doc.id),
@@ -223,7 +225,7 @@ async def get_document(
 @router.get("/documents/{document_id}/preview")
 async def get_document_preview(
     document_id: str,
-    user: User = Depends(get_current_user),
+    clone_ctx: CloneContext = Depends(get_clone_context),
     db: Session = Depends(get_db)
 ):
     """Get S3 presigned URL for document preview"""
@@ -235,15 +237,22 @@ async def get_document_preview(
             detail="Invalid document ID format"
         )
     
-    doc = db.query(Document).filter(
-        Document.id == doc_uuid,
-        Document.user_id == user.id
-    ).first()
+    # Validate document access (ensures document belongs to this clone)
+    data_access = CloneDataAccessService(clone_ctx.clone_id, clone_ctx.tenant_id, db)
+    doc = data_access.validate_document_access(doc_uuid)
     
-    if not doc:
+    # Verify S3 key matches tenant_id and clone_id
+    expected_prefix = f"documents/{clone_ctx.tenant_id}/{clone_ctx.clone_id}/"
+    if not doc.s3_key.startswith(expected_prefix):
+        logger.warning(
+            "S3 key mismatch detected",
+            document_id=str(doc.id),
+            s3_key=doc.s3_key,
+            expected_prefix=expected_prefix
+        )
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Document not found"
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Document S3 path does not match clone/tenant"
         )
     
     # Generate presigned URL
@@ -278,17 +287,17 @@ async def get_document_preview(
 @router.get("/documents/{document_id}/status", response_model=DocumentResponse)
 async def get_document_status(
     document_id: str,
-    user: User = Depends(get_current_user),
+    clone_ctx: CloneContext = Depends(get_clone_context),
     db: Session = Depends(get_db)
 ):
     """Get document processing status"""
-    return await get_document(document_id, user, db)
+    return await get_document(document_id, clone_ctx, db)
 
 
 @router.delete("/documents/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_document(
     document_id: str,
-    user: User = Depends(get_current_user),
+    clone_ctx: CloneContext = Depends(get_clone_context),
     db: Session = Depends(get_db)
 ):
     """Delete a document"""
@@ -300,16 +309,9 @@ async def delete_document(
             detail="Invalid document ID format"
         )
     
-    doc = db.query(Document).filter(
-        Document.id == doc_uuid,
-        Document.user_id == user.id
-    ).first()
-    
-    if not doc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Document not found"
-        )
+    # Validate document access (ensures document belongs to this clone)
+    data_access = CloneDataAccessService(clone_ctx.clone_id, clone_ctx.tenant_id, db)
+    doc = data_access.validate_document_access(doc_uuid)
     
     # Delete from S3
     try:
@@ -317,6 +319,14 @@ async def delete_document(
         s3_client.delete_object(doc.s3_key)
     except Exception as e:
         logger.warning("Failed to delete from S3", error=str(e), s3_key=doc.s3_key)
+    
+    # Delete vectors from vector store (filtered by clone_id/tenant_id)
+    try:
+        vector_store = data_access.get_vector_store()
+        # Delete by document_id in metadata
+        vector_store.delete(filter_metadata={"document_id": str(doc.id)})
+    except Exception as e:
+        logger.warning("Failed to delete vectors", error=str(e), document_id=str(doc.id))
     
     # Delete from database
     db.delete(doc)
@@ -328,13 +338,14 @@ async def delete_document(
 @router.get("/documents/search", response_model=List[DocumentResponse])
 async def search_documents(
     q: str = Query(..., description="Search query"),
-    user: User = Depends(get_current_user),
+    clone_ctx: CloneContext = Depends(get_clone_context),
     db: Session = Depends(get_db)
 ):
     """Search documents by name"""
-    # Simple text search on document names
+    data_access = CloneDataAccessService(clone_ctx.clone_id, clone_ctx.tenant_id, db)
+    # Simple text search on document names, filtered by clone_id
     documents = db.query(Document).filter(
-        Document.user_id == user.id,
+        Document.clone_id == clone_ctx.clone_id,
         Document.name.ilike(f"%{q}%")
     ).all()
     

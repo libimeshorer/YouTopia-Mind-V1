@@ -2,6 +2,7 @@
 
 from typing import List, Dict, Optional
 from src.rag.vector_store import VectorStore
+from src.rag.clone_vector_store import CloneVectorStore
 from src.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -13,10 +14,15 @@ class RAGRetriever:
     def __init__(
         self,
         vector_store: Optional[VectorStore] = None,
+        clone_vector_store: Optional[CloneVectorStore] = None,
         top_k: int = 5,
         min_score: float = 0.0,
     ):
-        self.vector_store = vector_store or VectorStore()
+        # Prefer CloneVectorStore if provided (enforces clone isolation)
+        if clone_vector_store:
+            self.vector_store = clone_vector_store
+        else:
+            self.vector_store = vector_store or VectorStore()
         self.top_k = top_k
         self.min_score = min_score
     

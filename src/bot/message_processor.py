@@ -1,6 +1,7 @@
 """Message processor for handling Slack messages and generating responses"""
 
 from typing import Optional
+from uuid import UUID
 from src.llm.prompt_builder import PromptBuilder
 from src.personality.profile import PersonalityProfile
 from src.personality.style_analyzer import StyleAnalyzer
@@ -27,6 +28,8 @@ class MessageProcessor:
     def process_message(
         self,
         text: str,
+        clone_id: UUID,
+        tenant_id: UUID,
         user_id: Optional[str] = None,
         channel_id: Optional[str] = None,
     ) -> str:
@@ -35,13 +38,15 @@ class MessageProcessor:
             # Remove bot mention if present
             query = text.strip()
             
-            logger.info("Processing message", query_preview=query[:50], user_id=user_id)
+            logger.info("Processing message", query_preview=query[:50], clone_id=str(clone_id), tenant_id=str(tenant_id))
             
-            # Generate response
+            # Generate response with clone_id and tenant_id for RAG filtering
             response = self.prompt_builder.generate_response(
                 query,
                 profile=self.profile,
                 temperature=0.7,
+                clone_id=clone_id,
+                tenant_id=tenant_id,
             )
             
             logger.info("Response generated", response_preview=response[:50])
@@ -53,6 +58,8 @@ class MessageProcessor:
     def process_message_stream(
         self,
         text: str,
+        clone_id: UUID,
+        tenant_id: UUID,
         user_id: Optional[str] = None,
         channel_id: Optional[str] = None,
     ):
@@ -60,14 +67,16 @@ class MessageProcessor:
         try:
             query = text.strip()
             
-            logger.info("Processing message (streaming)", query_preview=query[:50], user_id=user_id)
+            logger.info("Processing message (streaming)", query_preview=query[:50], clone_id=str(clone_id), tenant_id=str(tenant_id))
             
-            # Generate streaming response
+            # Generate streaming response with clone_id and tenant_id for RAG filtering
             stream = self.prompt_builder.generate_response(
                 query,
                 profile=self.profile,
                 temperature=0.7,
                 stream=True,
+                clone_id=clone_id,
+                tenant_id=tenant_id,
             )
             
             return stream

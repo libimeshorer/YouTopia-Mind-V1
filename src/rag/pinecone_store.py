@@ -71,10 +71,58 @@ class PineconeStore:
         texts: List[str],
         metadatas: Optional[List[Dict]] = None,
         ids: Optional[List[str]] = None,
+        namespace: Optional[str] = None,
+        validate_tenant_clone_ids: bool = False,
+        expected_tenant_id: Optional[str] = None,
+        expected_clone_id: Optional[str] = None,
     ) -> List[str]:
-        """Add texts to the vector store"""
+        """
+        Add texts to the vector store.
+        
+        Args:
+            texts: List of text strings to add
+            metadatas: Optional list of metadata dicts
+            ids: Optional list of vector IDs
+            namespace: Optional namespace for isolation (required when validate_tenant_clone_ids=True)
+            validate_tenant_clone_ids: If True, validates metadata includes matching tenant_id/clone_id
+            expected_tenant_id: Expected tenant_id for validation (required if validate_tenant_clone_ids=True)
+            expected_clone_id: Expected clone_id for validation (required if validate_tenant_clone_ids=True)
+        
+        Returns:
+            List of vector IDs
+        """
         if not texts:
             return []
+        
+        # Prepare metadatas
+        if metadatas is None:
+            metadatas = [{} for _ in texts]
+        
+        # Validate metadata if requested (used by CloneVectorStore)
+        if validate_tenant_clone_ids:
+            if not expected_tenant_id or not expected_clone_id:
+                raise ValueError(
+                    "expected_tenant_id and expected_clone_id are required when validate_tenant_clone_ids=True"
+                )
+            if not namespace:
+                raise ValueError(
+                    "namespace is required when validate_tenant_clone_ids=True. "
+                    "Use CloneVectorStore to automatically provide namespace and validation."
+                )
+            
+            from src.rag.utils import validate_metadata
+            from uuid import UUID
+            
+            validated_metadatas = []
+            for i, metadata in enumerate(metadatas):
+                validated_metadata = validate_metadata(
+                    metadata,
+                    UUID(expected_tenant_id),
+                    UUID(expected_clone_id),
+                    metadata_index=i,
+                )
+                validated_metadatas.append(validated_metadata)
+            metadatas = validated_metadatas
         
         # Generate embeddings
         logger.info("Generating embeddings", text_count=len(texts))
@@ -83,10 +131,6 @@ class PineconeStore:
         # Generate IDs if not provided
         if ids is None:
             ids = [str(uuid.uuid4()) for _ in texts]
-        
-        # Prepare metadatas
-        if metadatas is None:
-            metadatas = [{} for _ in texts]
         
         # Prepare vectors for Pinecone (text field + metadata)
         vectors = []
@@ -100,10 +144,22 @@ class PineconeStore:
                 "metadata": vector_metadata,
             })
         
-        # Upsert to Pinecone
+        # Upsert to Pinecone with namespace
+        # IMPORTANT: When used through CloneVectorStore, namespace is ALWAYS provided and required.
+        # The namespace parameter is optional here only for backward compatibility or direct use.
+        # For clone-scoped operations, always use CloneVectorStore which ensures namespace is set.
         try:
-            self.index.upsert(vectors=vectors)
-            logger.info("Texts added to Pinecone", count=len(texts))
+            upsert_kwargs = {"vectors": vectors}
+            if namespace:
+                upsert_kwargs["namespace"] = namespace
+            else:
+                # Warn if namespace is not provided (should use CloneVectorStore for clone-scoped operations)
+                logger.warning(
+                    "Adding texts without namespace. For clone-scoped operations, use CloneVectorStore "
+                    "which automatically provides the correct namespace."
+                )
+            self.index.upsert(**upsert_kwargs)
+            logger.info("Texts added to Pinecone", count=len(texts), namespace=namespace)
             return ids
         except Exception as e:
             logger.error("Error adding texts to Pinecone", error=str(e))
@@ -114,27 +170,80 @@ class PineconeStore:
         query: str,
         n_results: int = 5,
         filter_metadata: Optional[Dict] = None,
+        namespace: Optional[str] = None,
+        validate_tenant_clone_ids: bool = False,
+        expected_tenant_id: Optional[str] = None,
+        expected_clone_id: Optional[str] = None,
     ) -> List[Dict]:
-        """Search for similar texts"""
+        """
+        Search for similar texts.
+        
+        Args:
+            query: Search query string
+            n_results: Number of results to return
+            filter_metadata: Optional metadata filters
+            namespace: Optional namespace for isolation (required when validate_tenant_clone_ids=True)
+            validate_tenant_clone_ids: If True, validates filter_metadata includes matching tenant_id/clone_id
+            expected_tenant_id: Expected tenant_id for validation (required if validate_tenant_clone_ids=True)
+            expected_clone_id: Expected clone_id for validation (required if validate_tenant_clone_ids=True)
+        
+        Returns:
+            List of search results
+        """
+        # Validate filter_metadata if requested (used by CloneVectorStore)
+        if validate_tenant_clone_ids:
+            if not expected_tenant_id or not expected_clone_id:
+                raise ValueError(
+                    "expected_tenant_id and expected_clone_id are required when validate_tenant_clone_ids=True"
+                )
+            if not namespace:
+                raise ValueError(
+                    "namespace is required when validate_tenant_clone_ids=True. "
+                    "Use CloneVectorStore to automatically provide namespace and validation."
+                )
+            
+            if filter_metadata:
+                from src.rag.utils import validate_metadata
+                from uuid import UUID
+                # Validate that filter_metadata matches expected IDs
+                validate_metadata(
+                    filter_metadata,
+                    UUID(expected_tenant_id),
+                    UUID(expected_clone_id),
+                )
+        
         # Generate query embedding
         query_embedding = self.embedding_service.embed_text(query)
         
         # Build filter if provided
         filter_dict = None
         if filter_metadata:
-            # Pinecone filter format
             filter_dict = {}
             for key, value in filter_metadata.items():
                 filter_dict[key] = {"$eq": value}
         
         try:
-            # Query Pinecone
-            results = self.index.query(
-                vector=query_embedding,
-                top_k=n_results,
-                include_metadata=True,
-                filter=filter_dict,
-            )
+            # Query Pinecone with namespace
+            # IMPORTANT: When used through CloneVectorStore, namespace is ALWAYS provided and required.
+            # The namespace parameter is optional here only for backward compatibility or direct use.
+            # For clone-scoped operations, always use CloneVectorStore which ensures namespace is set.
+            query_kwargs = {
+                "vector": query_embedding,
+                "top_k": n_results,
+                "include_metadata": True,
+            }
+            if namespace:
+                query_kwargs["namespace"] = namespace
+            else:
+                # Warn if namespace is not provided (should use CloneVectorStore for clone-scoped operations)
+                logger.warning(
+                    "Searching without namespace. For clone-scoped operations, use CloneVectorStore "
+                    "which automatically provides the correct namespace."
+                )
+            if filter_dict:
+                query_kwargs["filter"] = filter_dict
+            
+            results = self.index.query(**query_kwargs)
             
             # Format results
             formatted_results = []
@@ -147,28 +256,105 @@ class PineconeStore:
                         "distance": 1 - match.score if match.score else None,  # Convert similarity to distance
                     })
             
-            logger.debug("Search completed", query_preview=query[:50], results_count=len(formatted_results))
+            logger.debug("Search completed", query_preview=query[:50], results_count=len(formatted_results), namespace=namespace)
             return formatted_results
         except Exception as e:
             logger.error("Error searching Pinecone", error=str(e))
             raise
     
-    def delete(self, ids: Optional[List[str]] = None, filter_metadata: Optional[Dict] = None) -> bool:
-        """Delete texts from vector store"""
+    def delete(
+        self,
+        ids: Optional[List[str]] = None,
+        filter_metadata: Optional[Dict] = None,
+        namespace: Optional[str] = None,
+        validate_tenant_clone_ids: bool = False,
+        expected_tenant_id: Optional[str] = None,
+        expected_clone_id: Optional[str] = None,
+    ) -> bool:
+        """
+        Delete texts from vector store.
+        
+        Args:
+            ids: Optional list of vector IDs to delete
+            filter_metadata: Optional metadata filters
+            namespace: Optional namespace for isolation (required when validate_tenant_clone_ids=True)
+            validate_tenant_clone_ids: If True, validates filter_metadata includes matching tenant_id/clone_id
+            expected_tenant_id: Expected tenant_id for validation (required if validate_tenant_clone_ids=True)
+            expected_clone_id: Expected clone_id for validation (required if validate_tenant_clone_ids=True)
+        
+        Returns:
+            True if deletion was successful
+        """
         try:
+            # Validate filter_metadata if requested (used by CloneVectorStore)
+            if validate_tenant_clone_ids:
+                if not expected_tenant_id or not expected_clone_id:
+                    raise ValueError(
+                        "expected_tenant_id and expected_clone_id are required when validate_tenant_clone_ids=True"
+                    )
+                if not namespace:
+                    raise ValueError(
+                        "namespace is required when validate_tenant_clone_ids=True. "
+                        "Use CloneVectorStore to automatically provide namespace and validation."
+                    )
+                
+                if filter_metadata:
+                    from src.rag.utils import validate_metadata
+                    from uuid import UUID
+                    # Validate that filter_metadata matches expected IDs
+                    validate_metadata(
+                        filter_metadata,
+                        UUID(expected_tenant_id),
+                        UUID(expected_clone_id),
+                    )
+            
+            delete_kwargs = {}
+            if namespace:
+                delete_kwargs["namespace"] = namespace
+            
             if ids:
-                self.index.delete(ids=ids)
-                logger.info("Texts deleted from Pinecone", ids_count=len(ids))
+                delete_kwargs["ids"] = ids
+                self.index.delete(**delete_kwargs)
+                logger.info("Texts deleted from Pinecone", ids_count=len(ids), namespace=namespace)
                 return True
             elif filter_metadata:
                 # Pinecone doesn't support delete by filter directly
                 # We need to query first, then delete by IDs
-                # For now, log a warning
-                logger.warning("Delete by filter not directly supported in Pinecone. Query first, then delete by IDs.")
-                return False
+                # Query to get IDs matching the filter
+                from src.rag.embeddings import EmbeddingService
+                embedding_service = EmbeddingService()
+                # Use a dummy query to get all matching vectors
+                dummy_embedding = [0.0] * embedding_service.get_embedding_dimension()
+                
+                filter_dict = {}
+                for key, value in filter_metadata.items():
+                    filter_dict[key] = {"$eq": value}
+                
+                query_kwargs = {
+                    "vector": dummy_embedding,
+                    "top_k": 10000,  # Maximum reasonable limit
+                    "include_metadata": False,
+                    "filter": filter_dict,
+                }
+                if namespace:
+                    query_kwargs["namespace"] = namespace
+                
+                # Query with a very high top_k to get all matching vectors
+                results = self.index.query(**query_kwargs)
+                
+                if results.matches:
+                    ids_to_delete = [match.id for match in results.matches]
+                    delete_kwargs["ids"] = ids_to_delete
+                    self.index.delete(**delete_kwargs)
+                    logger.info("Texts deleted from Pinecone by filter", ids_count=len(ids_to_delete), namespace=namespace)
+                    return True
+                else:
+                    logger.info("No vectors found matching filter criteria", namespace=namespace)
+                    return True
             else:
-                logger.warning("No deletion criteria provided")
-                return False
+                raise ValueError(
+                    "Either 'ids' or 'filter_metadata' must be provided."
+                )
         except Exception as e:
             logger.error("Error deleting from Pinecone", error=str(e))
             return False

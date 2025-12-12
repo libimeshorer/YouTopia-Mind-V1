@@ -6,8 +6,10 @@ from sqlalchemy.orm import Session
 from jose import jwt, JWTError, jwk
 import requests
 from typing import Optional
+from dataclasses import dataclass
+from uuid import UUID
 from src.database.db import get_db
-from src.database.models import User
+from src.database.models import User, Tenant, Clone
 from src.config.settings import settings
 from src.utils.logging import get_logger
 
@@ -142,13 +144,98 @@ def verify_clerk_token(token: str) -> dict:
         )
 
 
+@dataclass
+class CloneContext:
+    """Context object containing clone and tenant information"""
+    clone_id: UUID
+    tenant_id: UUID
+    clone: Clone
+
+
+def get_clone_context(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db)
+) -> CloneContext:
+    """
+    FastAPI dependency to get the current authenticated clone context.
+    Verifies Clerk JWT token, creates/looks up Tenant and Clone, returns CloneContext.
+    
+    Initial Implementation (Solopreneurs - 1:1 Clone-to-Tenant):
+    - Each clone gets their own tenant_id (1:1 relationship)
+    - When a clone signs up, automatically create a new Tenant record for them
+    - This supports solopreneurs who are the only clone in their company
+    
+    TODO: Update this logic when onboarding bigger companies with multiple clones per tenant
+    - Extract org_id from Clerk JWT token org_id claim
+    - Group multiple clones under the same tenant_id based on organization
+    - Create tenant management/admin flow for assigning clones to existing tenants
+    """
+    token = credentials.credentials
+    
+    # Verify token
+    payload = verify_clerk_token(token)
+    
+    # Extract user ID from token
+    # Clerk tokens typically have 'sub' or 'userId' claim
+    clerk_user_id = payload.get("sub") or payload.get("userId")
+    
+    if not clerk_user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token missing user ID"
+        )
+    
+    # Get or create Clone first
+    clone = db.query(Clone).filter(Clone.clerk_user_id == clerk_user_id).first()
+    
+    if clone:
+        # Clone exists, use its tenant_id
+        tenant = db.query(Tenant).filter(Tenant.id == clone.tenant_id).first()
+        if not tenant:
+            # Safety check: tenant should always exist
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Clone has invalid tenant_id"
+            )
+    else:
+        # New clone signup - create tenant and clone
+        # TODO: Update this logic when onboarding enterprise customers with multiple clones per tenant
+        # For now: Create 1:1 tenant per clone (solopreneur model)
+        # Future: Extract org_id from JWT, look up existing tenant, or create new tenant based on org
+        
+        # Create new tenant for this clone
+        tenant = Tenant(
+            name=f"Tenant for {clerk_user_id[:8]}",  # TODO: Use better naming when multi-clone support added
+            clerk_org_id=None  # TODO: Extract from JWT org_id claim for enterprise customers
+        )
+        db.add(tenant)
+        db.commit()
+        db.refresh(tenant)
+        
+        # Create clone linked to tenant
+        clone = Clone(
+            tenant_id=tenant.id,
+            clerk_user_id=clerk_user_id,
+            name=payload.get("name", "Clone"),
+            status="active"
+        )
+        db.add(clone)
+        db.commit()
+        db.refresh(clone)
+        logger.info("Created new clone with tenant", clone_id=str(clone.id), tenant_id=str(tenant.id))
+    
+    return CloneContext(clone_id=clone.id, tenant_id=tenant.id, clone=clone)
+
+
 def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: Session = Depends(get_db)
 ) -> User:
     """
+    DEPRECATED: Use get_clone_context() instead.
     FastAPI dependency to get the current authenticated user.
     Verifies Clerk JWT token and returns the User model.
+    Kept for backward compatibility during migration.
     """
     token = credentials.credentials
     

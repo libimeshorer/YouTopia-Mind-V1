@@ -2,8 +2,10 @@
 
 from typing import List, Dict, Optional
 from pathlib import Path
+from uuid import UUID
 
 from src.rag.vector_store import VectorStore
+from src.rag.clone_vector_store import CloneVectorStore
 from src.ingestion.document_ingester import DocumentIngester
 from src.ingestion.slack_ingester import SlackIngester
 from src.ingestion.email_ingester import EmailIngester
@@ -18,11 +20,16 @@ class IngestionPipeline:
     def __init__(
         self,
         vector_store: Optional[VectorStore] = None,
+        clone_vector_store: Optional[CloneVectorStore] = None,
         document_ingester: Optional[DocumentIngester] = None,
         slack_ingester: Optional[SlackIngester] = None,
         email_ingester: Optional[EmailIngester] = None,
     ):
-        self.vector_store = vector_store or VectorStore()
+        # Prefer CloneVectorStore if provided (enforces clone isolation)
+        if clone_vector_store:
+            self.vector_store = clone_vector_store
+        else:
+            self.vector_store = vector_store or VectorStore()
         self.document_ingester = document_ingester or DocumentIngester()
         self.slack_ingester = slack_ingester
         self.email_ingester = email_ingester or EmailIngester()
@@ -30,10 +37,18 @@ class IngestionPipeline:
     def ingest_documents(
         self,
         file_paths: List[str],
+        clone_id: UUID,
+        tenant_id: UUID,
         source_name: Optional[str] = None,
         additional_metadata: Optional[Dict] = None,
     ) -> int:
         """Ingest multiple document files"""
+        # Ensure tenant_id and clone_id are in metadata
+        if additional_metadata is None:
+            additional_metadata = {}
+        additional_metadata["tenant_id"] = str(tenant_id)
+        additional_metadata["clone_id"] = str(clone_id)
+        
         total_chunks = 0
         
         for file_path in file_paths:
@@ -45,7 +60,7 @@ class IngestionPipeline:
                 )
                 
                 if chunks:
-                    # Add to vector store
+                    # Add to vector store (CloneVectorStore will validate IDs)
                     texts = [chunk["text"] for chunk in chunks]
                     metadatas = [chunk["metadata"] for chunk in chunks]
                     self.vector_store.add_texts(texts, metadatas=metadatas)
@@ -61,6 +76,8 @@ class IngestionPipeline:
     
     def ingest_slack_messages(
         self,
+        clone_id: UUID,
+        tenant_id: UUID,
         channel_id: Optional[str] = None,
         user_id: Optional[str] = None,
         limit: int = 1000,
@@ -81,6 +98,11 @@ class IngestionPipeline:
             
             chunks = self.slack_ingester.ingest_messages(messages, user_id=user_id)
             
+            # Inject tenant_id and clone_id into metadata
+            for chunk in chunks:
+                chunk["metadata"]["tenant_id"] = str(tenant_id)
+                chunk["metadata"]["clone_id"] = str(clone_id)
+            
             if chunks:
                 texts = [chunk["text"] for chunk in chunks]
                 metadatas = [chunk["metadata"] for chunk in chunks]
@@ -94,6 +116,8 @@ class IngestionPipeline:
     
     def ingest_emails(
         self,
+        clone_id: UUID,
+        tenant_id: UUID,
         file_paths: Optional[List[str]] = None,
         imap_config: Optional[Dict] = None,
     ) -> int:
@@ -104,6 +128,11 @@ class IngestionPipeline:
             for file_path in file_paths:
                 try:
                     chunks = self.email_ingester.ingest_email_file(file_path)
+                    
+                    # Inject tenant_id and clone_id into metadata
+                    for chunk in chunks:
+                        chunk["metadata"]["tenant_id"] = str(tenant_id)
+                        chunk["metadata"]["clone_id"] = str(clone_id)
                     
                     if chunks:
                         texts = [chunk["text"] for chunk in chunks]
@@ -119,6 +148,11 @@ class IngestionPipeline:
         if imap_config:
             try:
                 chunks = self.email_ingester.ingest_from_imap(**imap_config)
+                
+                # Inject tenant_id and clone_id into metadata
+                for chunk in chunks:
+                    chunk["metadata"]["tenant_id"] = str(tenant_id)
+                    chunk["metadata"]["clone_id"] = str(clone_id)
                 
                 if chunks:
                     texts = [chunk["text"] for chunk in chunks]
@@ -136,23 +170,35 @@ class IngestionPipeline:
     def ingest_new_document(
         self,
         file_path: str,
+        clone_id: UUID,
+        tenant_id: UUID,
         source_name: Optional[str] = None,
     ) -> int:
         """Ingest a single new document (for incremental updates)"""
-        return self.ingest_documents([file_path], source_name=source_name)
+        return self.ingest_documents([file_path], clone_id, tenant_id, source_name=source_name)
     
     def ingest_new_document_from_bytes(
         self,
         file_bytes: bytes,
         filename: str,
+        clone_id: UUID,
+        tenant_id: UUID,
         source_name: Optional[str] = None,
+        additional_metadata: Optional[Dict] = None,
     ) -> int:
         """Ingest a new document from bytes (for uploads)"""
+        # Ensure tenant_id and clone_id are in metadata
+        if additional_metadata is None:
+            additional_metadata = {}
+        additional_metadata["tenant_id"] = str(tenant_id)
+        additional_metadata["clone_id"] = str(clone_id)
+        
         try:
             chunks = self.document_ingester.ingest_from_bytes(
                 file_bytes,
                 filename,
                 source_name=source_name,
+                additional_metadata=additional_metadata,
             )
             
             if chunks:

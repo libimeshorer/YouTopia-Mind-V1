@@ -1,8 +1,10 @@
 """Prompt builder that combines RAG context with personality profile"""
 
 from typing import List, Dict, Optional
+from uuid import UUID
 from src.llm.client import LLMClient
 from src.rag.retriever import RAGRetriever
+from src.rag.clone_vector_store import CloneVectorStore
 from src.personality.profile import PersonalityProfile
 from src.config.settings import settings
 from src.utils.logging import get_logger
@@ -69,6 +71,8 @@ When responding:
         profile: Optional[PersonalityProfile] = None,
         include_context: bool = True,
         max_context_tokens: Optional[int] = None,
+        clone_id: Optional[UUID] = None,
+        tenant_id: Optional[UUID] = None,
     ) -> List[Dict[str, str]]:
         """Build messages for LLM with context and personality"""
         messages = []
@@ -77,9 +81,10 @@ When responding:
         system_prompt = self.build_system_prompt(profile)
         messages.append({"role": "system", "content": system_prompt})
         
-        # Retrieve relevant context
+        # Retrieve relevant context (automatically filtered by clone_id/tenant_id if CloneVectorStore is used)
         context = ""
         if include_context:
+            # CloneVectorStore automatically filters by clone_id/tenant_id
             context = self.rag_retriever.retrieve_and_format(
                 user_query,
                 top_k=settings.top_k_retrieval,
@@ -137,9 +142,17 @@ Please respond in your typical communication style, using the knowledge from the
         profile: Optional[PersonalityProfile] = None,
         temperature: float = 0.7,
         stream: bool = False,
+        clone_id: Optional[UUID] = None,
+        tenant_id: Optional[UUID] = None,
     ) -> str:
         """Generate response using LLM with context and personality"""
-        messages = self.build_messages(user_query, profile, include_context=True)
+        messages = self.build_messages(
+            user_query, 
+            profile, 
+            include_context=True,
+            clone_id=clone_id,
+            tenant_id=tenant_id
+        )
         
         logger.info("Generating response", query_preview=user_query[:50], has_profile=profile is not None)
         

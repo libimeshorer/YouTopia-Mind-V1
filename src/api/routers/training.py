@@ -4,11 +4,11 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from datetime import datetime
-from src.api.dependencies import get_current_user, get_db
-from src.database.models import User, Document, Insight, TrainingStatus, Integration
+from src.api.dependencies import get_clone_context, CloneContext, get_db
+from src.database.models import Document, Insight, TrainingStatus, Integration
 from src.utils.logging import get_logger
 from pydantic import BaseModel
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 logger = get_logger(__name__)
 
@@ -35,25 +35,25 @@ class TrainingStatsResponse(BaseModel):
     lastActivity: Optional[str] = None
 
 
-def calculate_training_status(user: User, db: Session) -> TrainingStatus:
-    """Calculate or get training status for a user"""
+def calculate_training_status(clone_id, db: Session) -> TrainingStatus:
+    """Calculate or get training status for a clone"""
     # Get or create training status
     training_status = db.query(TrainingStatus).filter(
-        TrainingStatus.user_id == user.id
+        TrainingStatus.clone_id == clone_id
     ).first()
     
     # Count actual data
     documents_count = db.query(func.count(Document.id)).filter(
-        Document.user_id == user.id,
+        Document.clone_id == clone_id,
         Document.status == "complete"
     ).scalar() or 0
     
     insights_count = db.query(func.count(Insight.id)).filter(
-        Insight.user_id == user.id
+        Insight.clone_id == clone_id
     ).scalar() or 0
     
     integrations_count = db.query(func.count(Integration.id)).filter(
-        Integration.user_id == user.id,
+        Integration.clone_id == clone_id,
         Integration.status == "connected"
     ).scalar() or 0
     
@@ -120,7 +120,7 @@ def calculate_training_status(user: User, db: Session) -> TrainingStatus:
             achievements.append("Integrations connected")
         
         training_status = TrainingStatus(
-            user_id=user.id,
+            clone_id=clone_id,
             is_complete=is_complete,
             progress=progress,
             documents_count=documents_count,
@@ -139,11 +139,11 @@ def calculate_training_status(user: User, db: Session) -> TrainingStatus:
 
 @router.get("/training/status", response_model=TrainingStatusResponse)
 async def get_training_status(
-    user: User = Depends(get_current_user),
+    clone_ctx: CloneContext = Depends(get_clone_context),
     db: Session = Depends(get_db)
 ):
-    """Get training status for the current user"""
-    training_status = calculate_training_status(user, db)
+    """Get training status for the current clone"""
+    training_status = calculate_training_status(clone_ctx.clone_id, db)
     
     return TrainingStatusResponse(
         isComplete=training_status.is_complete,
@@ -158,11 +158,11 @@ async def get_training_status(
 
 @router.post("/training/complete", response_model=TrainingStatusResponse)
 async def complete_training(
-    user: User = Depends(get_current_user),
+    clone_ctx: CloneContext = Depends(get_clone_context),
     db: Session = Depends(get_db)
 ):
     """Mark training as complete"""
-    training_status = calculate_training_status(user, db)
+    training_status = calculate_training_status(clone_ctx.clone_id, db)
     
     if training_status.progress < 100:
         raise HTTPException(
@@ -187,19 +187,19 @@ async def complete_training(
 
 @router.get("/training/stats", response_model=TrainingStatsResponse)
 async def get_training_stats(
-    user: User = Depends(get_current_user),
+    clone_ctx: CloneContext = Depends(get_clone_context),
     db: Session = Depends(get_db)
 ):
     """Get training statistics"""
-    training_status = calculate_training_status(user, db)
+    training_status = calculate_training_status(clone_ctx.clone_id, db)
     
     # Get last activity timestamp
     last_doc = db.query(func.max(Document.uploaded_at)).filter(
-        Document.user_id == user.id
+        Document.clone_id == clone_ctx.clone_id
     ).scalar()
     
     last_insight = db.query(func.max(Insight.created_at)).filter(
-        Insight.user_id == user.id
+        Insight.clone_id == clone_ctx.clone_id
     ).scalar()
     
     last_activity = None
@@ -213,7 +213,7 @@ async def get_training_stats(
     # Calculate data points (chunks from documents + insights)
     data_points = (
         db.query(func.sum(Document.chunks_count)).filter(
-            Document.user_id == user.id,
+            Document.clone_id == clone_ctx.clone_id,
             Document.status == "complete"
         ).scalar() or 0
     ) + training_status.insights_count
