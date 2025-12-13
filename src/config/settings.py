@@ -76,14 +76,60 @@ def get_secret_from_aws(secret_name: str, region_name: str = "us-east-1") -> Opt
 
 def load_settings() -> Settings:
     """Load settings from environment variables, with optional AWS Secrets Manager fallback"""
-    # Try to load .env.local first if it exists, then .env
     try:
         from dotenv import load_dotenv
-        # Load .env.local first (higher priority), then .env
+        
+        # Determine which environment file to load
+        # Check ENVIRONMENT variable first (from system env or already loaded)
+        env_from_system = os.getenv("ENVIRONMENT", "").lower()
+        
+        # Priority order:
+        # 1. .env.local (if exists) - highest priority for local overrides
+        # 2. .dev.env or .prod.env based on ENVIRONMENT variable
+        # 3. .env (fallback)
+        
+        env_file_loaded = False
+        
+        # First, try .env.local if it exists (for local overrides)
         if os.path.exists(".env.local"):
             load_dotenv(".env.local", override=False)
-        if os.path.exists(".env"):
+            env_file_loaded = True
+            # Re-check ENVIRONMENT after loading .env.local
+            env_from_system = os.getenv("ENVIRONMENT", "").lower()
+        
+        # Then load environment-specific file based on ENVIRONMENT variable
+        # Default to production if not specified
+        if env_from_system == "development" or env_from_system == "dev":
+            if os.path.exists(".dev.env"):
+                load_dotenv(".dev.env", override=False)
+                env_file_loaded = True
+        else:
+            # Default to production
+            if os.path.exists(".prod.env"):
+                load_dotenv(".prod.env", override=False)
+                env_file_loaded = True
+        
+        # Fallback to .env if no environment-specific file was loaded
+        if not env_file_loaded and os.path.exists(".env"):
             load_dotenv(".env", override=False)
+        
+        # Handle S3_BUCKET_NAME based on environment
+        # If S3_BUCKET_NAME is not set, try S3_BUCKET_NAME_DEV or S3_BUCKET_NAME_PROD
+        if not os.getenv("S3_BUCKET_NAME"):
+            env_check = os.getenv("ENVIRONMENT", "").lower()
+            if env_check == "development" or env_check == "dev":
+                bucket_name = os.getenv("S3_BUCKET_NAME_DEV")
+                if bucket_name:
+                    os.environ["S3_BUCKET_NAME"] = bucket_name
+            else:
+                # Default to production
+                bucket_name = os.getenv("S3_BUCKET_NAME_PROD")
+                if bucket_name:
+                    os.environ["S3_BUCKET_NAME"] = bucket_name
+                # Fallback to DEV if PROD not found
+                elif os.getenv("S3_BUCKET_NAME_DEV"):
+                    os.environ["S3_BUCKET_NAME"] = os.getenv("S3_BUCKET_NAME_DEV")
+        
     except ImportError:
         # python-dotenv not available, rely on pydantic-settings default behavior
         pass
