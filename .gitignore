@@ -74,4 +74,5 @@ frontend/.vercel/
 frontend/.env.local
 frontend/.env.production.local
 
-
+# Cursor plans
+.cursor/plans/
