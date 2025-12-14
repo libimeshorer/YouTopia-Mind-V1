@@ -3,7 +3,6 @@
 import os
 from typing import Optional, Callable
 from functools import wraps
-from src.config.settings import settings
 from src.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -130,6 +129,9 @@ def validate_environment_config() -> tuple[bool, list[str]]:
     Returns:
         Tuple of (is_valid, list_of_warnings)
     """
+    # Lazy import to avoid circular dependency
+    from src.config.settings import settings
+    
     warnings = []
     env = get_environment()
     
@@ -199,6 +201,9 @@ def log_environment_info():
     Log current environment and key configuration values.
     Should be called at application startup.
     """
+    # Lazy import to avoid circular dependency
+    from src.config.settings import settings
+    
     env = get_environment()
     
     # Mask sensitive values

@@ -163,20 +163,6 @@ def load_settings() -> Settings:
     # Try to load from environment
     try:
         settings = Settings()
-        
-        # Add startup validation and warnings after settings are loaded
-        # Import here to avoid circular dependency
-        from src.utils.environment import validate_environment_config, warn_if_production, log_environment_info
-        
-        # Log environment info
-        log_environment_info()
-        
-        # Validate configuration matches environment
-        validate_environment_config()
-        
-        # Warn if production
-        warn_if_production()
-        
         return settings
     except Exception as e:
         # If critical secrets are missing, try AWS Secrets Manager
@@ -187,13 +173,6 @@ def load_settings() -> Settings:
                 for key, value in secrets.items():
                     os.environ[key.upper()] = str(value)
                 settings = Settings()
-                
-                # Add startup validation after loading from secrets
-                from src.utils.environment import validate_environment_config, warn_if_production, log_environment_info
-                log_environment_info()
-                validate_environment_config()
-                warn_if_production()
-                
                 return settings
         raise e
 
