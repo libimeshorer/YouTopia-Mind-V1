@@ -205,7 +205,7 @@ def get_clone_context(
         
         # Create new tenant for this clone
         tenant = Tenant(
-            name=f"Tenant for {clerk_user_id[:8]}",  # TODO: Use better naming when multi-clone support added
+            name=f"Tenant id for {clerk_user_id[:8]}",  # TODO: Use better naming when multi-clone support added
             clerk_org_id=None  # TODO: Extract from JWT org_id claim for enterprise customers
         )
         db.add(tenant)

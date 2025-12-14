@@ -79,6 +79,8 @@ class DocumentIngester:
         additional_metadata: Optional[Dict] = None,
     ) -> List[Dict]:
         """Ingest a document file and return chunks"""
+        from datetime import datetime
+        
         path = Path(file_path)
         source = source_name or path.name
         
@@ -91,11 +93,13 @@ class DocumentIngester:
             logger.warning("No text extracted from document", file_path=file_path)
             return []
         
-        # Prepare metadata
+        # Prepare metadata with timestamps
+        ingestion_timestamp = datetime.utcnow().isoformat()
         metadata = {
             "source": source,
             "file_path": str(path),
             "file_type": path.suffix.lower(),
+            "ingested_at": ingestion_timestamp,  # When chunks were created and ingested
             **(additional_metadata or {}),
         }
         
@@ -120,9 +124,25 @@ class DocumentIngester:
         filename: str,
         source_name: Optional[str] = None,
         additional_metadata: Optional[Dict] = None,
+        document_uploaded_at: Optional[str] = None,
     ) -> List[Dict]:
-        """Ingest a document from bytes (e.g., from upload)"""
+        """
+        Ingest a document from bytes (e.g., from upload).
+        
+        Args:
+            file_bytes: Document file bytes
+            filename: Original filename
+            source_name: Optional source identifier
+            additional_metadata: Optional additional metadata to include
+            document_uploaded_at: ISO format timestamp of when document was uploaded (from Document.uploaded_at)
+        """
         import tempfile
+        
+        # Add document upload timestamp to metadata if provided
+        if document_uploaded_at and additional_metadata:
+            additional_metadata["document_uploaded_at"] = document_uploaded_at
+        elif document_uploaded_at:
+            additional_metadata = {"document_uploaded_at": document_uploaded_at}
         
         # Save to temporary file
         path = Path(filename)

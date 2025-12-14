@@ -75,6 +75,7 @@ class Document(Base):
     s3_key = Column(String, nullable=False)  # S3 object key
     chunks_count = Column(Integer, default=0)  # Number of chunks created
     uploaded_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    processed_at = Column(DateTime, nullable=True)  # When document was processed and chunks were created
     error_message = Column(Text, nullable=True)  # Error message if status is error
     
     # Relationships

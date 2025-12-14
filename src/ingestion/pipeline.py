@@ -41,13 +41,28 @@ class IngestionPipeline:
         tenant_id: UUID,
         source_name: Optional[str] = None,
         additional_metadata: Optional[Dict] = None,
+        document_uploaded_at: Optional[str] = None,
     ) -> int:
-        """Ingest multiple document files"""
+        """
+        Ingest multiple document files.
+        
+        Args:
+            file_paths: List of file paths to ingest
+            clone_id: Clone UUID
+            tenant_id: Tenant UUID
+            source_name: Optional source identifier
+            additional_metadata: Optional additional metadata
+            document_uploaded_at: ISO format timestamp of when document was uploaded (from Document.uploaded_at)
+        """
         # Ensure tenant_id and clone_id are in metadata
         if additional_metadata is None:
             additional_metadata = {}
         additional_metadata["tenant_id"] = str(tenant_id)
         additional_metadata["clone_id"] = str(clone_id)
+        
+        # Add document upload timestamp if provided
+        if document_uploaded_at:
+            additional_metadata["document_uploaded_at"] = document_uploaded_at
         
         total_chunks = 0
         
@@ -83,6 +98,8 @@ class IngestionPipeline:
         limit: int = 1000,
     ) -> int:
         """Ingest Slack messages"""
+        from datetime import datetime
+        
         if not self.slack_ingester:
             logger.error("Slack ingester not initialized")
             return 0
@@ -98,10 +115,12 @@ class IngestionPipeline:
             
             chunks = self.slack_ingester.ingest_messages(messages, user_id=user_id)
             
-            # Inject tenant_id and clone_id into metadata
+            # Inject tenant_id, clone_id, and ingestion timestamp into metadata
+            ingestion_timestamp = datetime.utcnow().isoformat()
             for chunk in chunks:
                 chunk["metadata"]["tenant_id"] = str(tenant_id)
                 chunk["metadata"]["clone_id"] = str(clone_id)
+                chunk["metadata"]["ingested_at"] = ingestion_timestamp
             
             if chunks:
                 texts = [chunk["text"] for chunk in chunks]
@@ -122,17 +141,21 @@ class IngestionPipeline:
         imap_config: Optional[Dict] = None,
     ) -> int:
         """Ingest emails from files or IMAP"""
+        from datetime import datetime
+        
         total_chunks = 0
+        ingestion_timestamp = datetime.utcnow().isoformat()
         
         if file_paths:
             for file_path in file_paths:
                 try:
                     chunks = self.email_ingester.ingest_email_file(file_path)
                     
-                    # Inject tenant_id and clone_id into metadata
+                    # Inject tenant_id, clone_id, and ingestion timestamp into metadata
                     for chunk in chunks:
                         chunk["metadata"]["tenant_id"] = str(tenant_id)
                         chunk["metadata"]["clone_id"] = str(clone_id)
+                        chunk["metadata"]["ingested_at"] = ingestion_timestamp
                     
                     if chunks:
                         texts = [chunk["text"] for chunk in chunks]
@@ -149,10 +172,11 @@ class IngestionPipeline:
             try:
                 chunks = self.email_ingester.ingest_from_imap(**imap_config)
                 
-                # Inject tenant_id and clone_id into metadata
+                # Inject tenant_id, clone_id, and ingestion timestamp into metadata
                 for chunk in chunks:
                     chunk["metadata"]["tenant_id"] = str(tenant_id)
                     chunk["metadata"]["clone_id"] = str(clone_id)
+                    chunk["metadata"]["ingested_at"] = ingestion_timestamp
                 
                 if chunks:
                     texts = [chunk["text"] for chunk in chunks]
@@ -173,9 +197,25 @@ class IngestionPipeline:
         clone_id: UUID,
         tenant_id: UUID,
         source_name: Optional[str] = None,
+        document_uploaded_at: Optional[str] = None,
     ) -> int:
-        """Ingest a single new document (for incremental updates)"""
-        return self.ingest_documents([file_path], clone_id, tenant_id, source_name=source_name)
+        """
+        Ingest a single new document (for incremental updates).
+        
+        Args:
+            file_path: Path to document file
+            clone_id: Clone UUID
+            tenant_id: Tenant UUID
+            source_name: Optional source identifier
+            document_uploaded_at: ISO format timestamp of when document was uploaded (from Document.uploaded_at)
+        """
+        return self.ingest_documents(
+            [file_path], 
+            clone_id, 
+            tenant_id, 
+            source_name=source_name,
+            document_uploaded_at=document_uploaded_at
+        )
     
     def ingest_new_document_from_bytes(
         self,
@@ -185,13 +225,29 @@ class IngestionPipeline:
         tenant_id: UUID,
         source_name: Optional[str] = None,
         additional_metadata: Optional[Dict] = None,
+        document_uploaded_at: Optional[str] = None,
     ) -> int:
-        """Ingest a new document from bytes (for uploads)"""
+        """
+        Ingest a new document from bytes (for uploads).
+        
+        Args:
+            file_bytes: Document file bytes
+            filename: Original filename
+            clone_id: Clone UUID
+            tenant_id: Tenant UUID
+            source_name: Optional source identifier
+            additional_metadata: Optional additional metadata
+            document_uploaded_at: ISO format timestamp of when document was uploaded (from Document.uploaded_at)
+        """
         # Ensure tenant_id and clone_id are in metadata
         if additional_metadata is None:
             additional_metadata = {}
         additional_metadata["tenant_id"] = str(tenant_id)
         additional_metadata["clone_id"] = str(clone_id)
+        
+        # Add document upload timestamp if provided
+        if document_uploaded_at:
+            additional_metadata["document_uploaded_at"] = document_uploaded_at
         
         try:
             chunks = self.document_ingester.ingest_from_bytes(
@@ -199,6 +255,7 @@ class IngestionPipeline:
                 filename,
                 source_name=source_name,
                 additional_metadata=additional_metadata,
+                document_uploaded_at=document_uploaded_at,
             )
             
             if chunks:
