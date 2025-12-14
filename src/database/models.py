@@ -43,6 +43,8 @@ class Clone(Base):
     insights = relationship("Insight", back_populates="clone", cascade="all, delete-orphan")
     training_status = relationship("TrainingStatus", back_populates="clone", uselist=False, cascade="all, delete-orphan")
     integrations = relationship("Integration", back_populates="clone", cascade="all, delete-orphan")
+    messages = relationship("Message", back_populates="clone", cascade="all, delete-orphan")
+    data_sources = relationship("DataSource", back_populates="clone", cascade="all, delete-orphan")
 
 
 class User(Base):
@@ -144,3 +146,51 @@ class Integration(Base):
     # Relationships
     clone = relationship("Clone", back_populates="integrations")
     user = relationship("User", back_populates="integrations")  # DEPRECATED
+    data_sources = relationship("DataSource", back_populates="integration", cascade="all, delete-orphan")
+
+
+class Message(Base):
+    """Message model - stores conversation history between user and clone"""
+    __tablename__ = "messages"
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    clone_id = Column(UUID(as_uuid=True), ForeignKey("clones.id"), nullable=False, index=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True, index=True)  # DEPRECATED: kept for migration
+    session_id = Column(String, nullable=True, index=True)  # Groups messages into conversations
+    role = Column(String, nullable=False)  # "user" or "assistant"
+    content = Column(Text, nullable=False)  # Message text
+    rag_context_json = Column(JSON, nullable=True)  # RAG chunks used in response (for assistant messages)
+    feedback_rating = Column(Integer, nullable=True)  # User feedback: -1 (thumbs down), 1 (thumbs up), null (no feedback)
+    feedback_comment = Column(Text, nullable=True)  # Optional feedback text
+    tokens_used = Column(Integer, nullable=True)  # LLM tokens consumed (for assistant messages)
+    response_time_ms = Column(Integer, nullable=True)  # Response generation time in milliseconds
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    
+    # Relationships
+    clone = relationship("Clone", back_populates="messages")
+    user = relationship("User")  # DEPRECATED
+
+
+class DataSource(Base):
+    """DataSource model - tracks specific data sources within integrations (e.g., Slack channels, Gmail labels)"""
+    __tablename__ = "data_sources"
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    clone_id = Column(UUID(as_uuid=True), ForeignKey("clones.id"), nullable=False, index=True)
+    integration_id = Column(UUID(as_uuid=True), ForeignKey("integrations.id"), nullable=False, index=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True, index=True)  # DEPRECATED: kept for migration
+    source_type = Column(String, nullable=False)  # "slack_channel", "gmail_label", "email_folder", etc.
+    source_identifier = Column(String, nullable=False)  # Channel ID, label name, folder path, etc.
+    display_name = Column(String, nullable=True)  # Human-readable name (e.g., "#general" or "Work/Inbox")
+    is_active = Column(Boolean, default=True, nullable=False)  # Can disable without deleting
+    chunks_count = Column(Integer, default=0, nullable=False)  # Number of chunks ingested from this source
+    last_synced_at = Column(DateTime, nullable=True)  # Last successful sync
+    last_error = Column(Text, nullable=True)  # Last error message if sync failed
+    sync_settings_json = Column(JSON, nullable=True, default={})  # Source-specific sync settings
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    
+    # Relationships
+    clone = relationship("Clone", back_populates="data_sources")
+    integration = relationship("Integration", back_populates="data_sources")
+    user = relationship("User")  # DEPRECATED
