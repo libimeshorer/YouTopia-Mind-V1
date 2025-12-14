@@ -5,6 +5,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from src.api.routers import documents, insights, training
 from src.utils.logging import get_logger
+from src.config import settings
+from src.utils.environment import (
+    log_environment_info,
+    validate_environment_config,
+    warn_if_production,
+    get_environment
+)
 
 logger = get_logger(__name__)
 
@@ -38,6 +45,53 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.on_event("startup")
+async def startup_event():
+    """Log environment and configuration on application startup"""
+    env = get_environment()
+    
+    # Log environment information
+    log_environment_info()
+    
+    # Validate environment configuration
+    is_valid, warnings = validate_environment_config()
+    
+    # Log configuration summary
+    logger.info(
+        "FastAPI server starting",
+        environment=env,
+        pinecone_index=settings.pinecone_index_name or "Not set",
+        s3_bucket=settings.s3_bucket_name or "Not set",
+        config_valid=is_valid,
+    )
+    
+    # Prominent warning if production
+    if env == "production":
+        logger.warning(
+            "=" * 70,
+        )
+        logger.warning(
+            "⚠️  PRODUCTION ENVIRONMENT - API SERVER STARTING",
+            environment=env,
+            message="All API operations will affect production data"
+        )
+        logger.warning(
+            f"   Pinecone Index: {settings.pinecone_index_name}",
+        )
+        logger.warning(
+            f"   S3 Bucket: {settings.s3_bucket_name}",
+        )
+        logger.warning(
+            "=" * 70,
+        )
+    
+    if warnings:
+        logger.warning(
+            "Environment configuration warnings detected - review before proceeding",
+            warning_count=len(warnings)
+        )
 
 
 @app.get("/health")

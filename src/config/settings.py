@@ -81,7 +81,25 @@ def load_settings() -> Settings:
         
         # Determine which environment file to load
         # Check ENVIRONMENT variable first (from system env or already loaded)
-        env_from_system = os.getenv("ENVIRONMENT", "").lower()
+        env_from_system = os.getenv("ENVIRONMENT", "").lower().strip()
+        
+        # CRITICAL SAFETY: Default to development if not specified (fail-safe)
+        # Only use production if explicitly set to "production" or "prod"
+        if not env_from_system:
+            env_from_system = "development"
+            os.environ["ENVIRONMENT"] = "development"
+        
+        # Normalize environment values
+        if env_from_system in ("dev", "development"):
+            env_from_system = "development"
+            os.environ["ENVIRONMENT"] = "development"
+        elif env_from_system in ("prod", "production"):
+            env_from_system = "production"
+            os.environ["ENVIRONMENT"] = "production"
+        else:
+            # Unknown value - default to development for safety
+            env_from_system = "development"
+            os.environ["ENVIRONMENT"] = "development"
         
         # Priority order:
         # 1. .env.local (if exists) - highest priority for local overrides
@@ -95,16 +113,25 @@ def load_settings() -> Settings:
             load_dotenv(".env.local", override=False)
             env_file_loaded = True
             # Re-check ENVIRONMENT after loading .env.local
-            env_from_system = os.getenv("ENVIRONMENT", "").lower()
+            env_from_system = os.getenv("ENVIRONMENT", "").lower().strip()
+            # Re-normalize after loading .env.local
+            if env_from_system in ("dev", "development"):
+                env_from_system = "development"
+                os.environ["ENVIRONMENT"] = "development"
+            elif env_from_system in ("prod", "production"):
+                env_from_system = "production"
+                os.environ["ENVIRONMENT"] = "production"
+            elif not env_from_system:
+                env_from_system = "development"
+                os.environ["ENVIRONMENT"] = "development"
         
         # Then load environment-specific file based on ENVIRONMENT variable
-        # Default to production if not specified
-        if env_from_system == "development" or env_from_system == "dev":
+        # SAFETY: Default to development if not specified
+        if env_from_system == "development":
             if os.path.exists(".dev.env"):
                 load_dotenv(".dev.env", override=False)
                 env_file_loaded = True
-        else:
-            # Default to production
+        elif env_from_system == "production":
             if os.path.exists(".prod.env"):
                 load_dotenv(".prod.env", override=False)
                 env_file_loaded = True
@@ -116,17 +143,16 @@ def load_settings() -> Settings:
         # Handle S3_BUCKET_NAME based on environment
         # If S3_BUCKET_NAME is not set, try S3_BUCKET_NAME_DEV or S3_BUCKET_NAME_PROD
         if not os.getenv("S3_BUCKET_NAME"):
-            env_check = os.getenv("ENVIRONMENT", "").lower()
-            if env_check == "development" or env_check == "dev":
+            env_check = os.getenv("ENVIRONMENT", "development").lower()
+            if env_check == "development":
                 bucket_name = os.getenv("S3_BUCKET_NAME_DEV")
                 if bucket_name:
                     os.environ["S3_BUCKET_NAME"] = bucket_name
-            else:
-                # Default to production
+            elif env_check == "production":
                 bucket_name = os.getenv("S3_BUCKET_NAME_PROD")
                 if bucket_name:
                     os.environ["S3_BUCKET_NAME"] = bucket_name
-                # Fallback to DEV if PROD not found
+                # Fallback to DEV if PROD not found (safety fallback)
                 elif os.getenv("S3_BUCKET_NAME_DEV"):
                     os.environ["S3_BUCKET_NAME"] = os.getenv("S3_BUCKET_NAME_DEV")
         
@@ -137,6 +163,20 @@ def load_settings() -> Settings:
     # Try to load from environment
     try:
         settings = Settings()
+        
+        # Add startup validation and warnings after settings are loaded
+        # Import here to avoid circular dependency
+        from src.utils.environment import validate_environment_config, warn_if_production, log_environment_info
+        
+        # Log environment info
+        log_environment_info()
+        
+        # Validate configuration matches environment
+        validate_environment_config()
+        
+        # Warn if production
+        warn_if_production()
+        
         return settings
     except Exception as e:
         # If critical secrets are missing, try AWS Secrets Manager
@@ -146,7 +186,15 @@ def load_settings() -> Settings:
                 # Update environment with secrets
                 for key, value in secrets.items():
                     os.environ[key.upper()] = str(value)
-                return Settings()
+                settings = Settings()
+                
+                # Add startup validation after loading from secrets
+                from src.utils.environment import validate_environment_config, warn_if_production, log_environment_info
+                log_environment_info()
+                validate_environment_config()
+                warn_if_production()
+                
+                return settings
         raise e
 
 

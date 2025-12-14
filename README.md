@@ -68,16 +68,28 @@ pip install -r requirements.txt
 
 4. Configure environment variables:
 ```bash
-cp .env.example .env
-# Edit .env with your credentials
+cp .env.example .dev.env
+# Edit .dev.env with your development credentials
 ```
 
-Required environment variables:
+⚠️ **Important**: This project uses a two-environment setup (development and production). See [Environment Setup Guide](docs/ENVIRONMENT_SETUP.md) for detailed configuration.
+
+**Quick Start (Development)**:
+```bash
+export ENVIRONMENT=development
+# Or set in .dev.env: ENVIRONMENT=development
+```
+
+**Required environment variables** (see [Environment Setup Guide](docs/ENVIRONMENT_SETUP.md) for complete list):
+- `ENVIRONMENT`: `development` or `production` (defaults to `development` if not set)
 - `SLACK_BOT_TOKEN`: Your Slack bot token
 - `SLACK_SIGNING_SECRET`: Your Slack signing secret
 - `SLACK_APP_TOKEN`: Your Slack app token (for socket mode)
 - `OPENAI_API_KEY`: Your OpenAI API key
+- `PINECONE_API_KEY`: Your Pinecone API key
+- `PINECONE_INDEX_NAME`: Pinecone index name (e.g., `youtopia-dev` for dev, `youtopia-prod` for prod)
 - `S3_BUCKET_NAME`: AWS S3 bucket name for data storage
+- `DATABASE_URL`: PostgreSQL database URL
 - `AWS_REGION`: AWS region (default: us-east-1)
 
 ## Usage
@@ -156,6 +168,47 @@ youtopia-mind-v1/
 └── tests/                # Unit and integration tests
 ```
 
+## Environment Configuration
+
+⚠️ **Production Safety**: This project implements strict environment separation to protect production data. Before working with production, please read:
+
+- **[Environment Setup Guide](docs/ENVIRONMENT_SETUP.md)** - Complete guide to setting up development and production environments
+- **[Production Checklist](docs/PRODUCTION_CHECKLIST.md)** - Pre-deployment safety checklist
+
+### Quick Environment Check
+
+Before running operations, verify your environment configuration:
+```bash
+python scripts/check_environment.py
+```
+
+This will validate:
+- Environment variable is set correctly
+- Resource names match environment (dev vs prod)
+- Required settings are configured
+- Database connection safety
+
+### Two-Environment Setup
+
+- **Development**: For local development and testing (default)
+  - Separate Pinecone index (e.g., `youtopia-dev`)
+  - Separate S3 bucket (e.g., `youtopia-s3-dev`)
+  - Separate database instance
+  - Safe for experimentation
+
+- **Production**: For customer-facing operations
+  - Separate Pinecone index (e.g., `youtopia-prod`)
+  - Separate S3 bucket (e.g., `youtopia-s3-prod`)
+  - Production database (Render PostgreSQL)
+  - **Protected** - destructive operations blocked
+
+**Safety Features**:
+- Defaults to development when `ENVIRONMENT` is unset
+- Production operations require explicit confirmation
+- Resource name validation prevents mismatches
+- Destructive operations blocked in production
+- Startup warnings when production is detected
+
 ## Configuration
 
 ### RAG Settings
@@ -231,14 +284,36 @@ black src/ scripts/
 
 ### Common Issues
 
-1. **ChromaDB errors**: Ensure the data directory exists and has write permissions
-2. **Slack API errors**: Verify bot token and permissions
-3. **OpenAI API errors**: Check API key and rate limits
-4. **AWS errors**: Verify credentials and S3 bucket permissions
+1. **Environment not detected**: 
+   - Verify `ENVIRONMENT` variable is set: `echo $ENVIRONMENT`
+   - Check environment files exist: `ls -la .dev.env .prod.env`
+   - Run environment check: `python scripts/check_environment.py`
+
+2. **Resource name mismatches**: 
+   - Ensure Pinecone index name matches environment (contains "dev" or "prod")
+   - Ensure S3 bucket name matches environment
+   - See [Environment Setup Guide](docs/ENVIRONMENT_SETUP.md) for naming conventions
+
+3. **Production operations blocked**: 
+   - Some operations are blocked in production for safety (e.g., `PineconeStore.reset()`)
+   - Use development environment for testing destructive operations
+   - See [Production Checklist](docs/PRODUCTION_CHECKLIST.md) for guidelines
+
+4. **ChromaDB errors**: Ensure the data directory exists and has write permissions
+5. **Slack API errors**: Verify bot token and permissions
+6. **OpenAI API errors**: Check API key and rate limits
+7. **AWS errors**: Verify credentials and S3 bucket permissions
 
 ### Logging
 
 Logs are structured and can be viewed in CloudWatch (AWS) or console (local). Set `LOG_LEVEL` environment variable to control verbosity.
+
+Startup logs include environment information:
+- Current environment (development/production)
+- Pinecone index name
+- S3 bucket name
+- Database connection (masked)
+- Warnings if production is detected
 
 ## Future Enhancements
 

@@ -33,11 +33,24 @@ class PineconeStore:
         # Get or create index
         self.index = self._get_or_create_index()
         
+        # Log environment information for safety
+        from src.utils.environment import get_environment, warn_if_production
+        env = get_environment()
         logger.info(
             "Pinecone store initialized",
             index_name=self.index_name,
             dimension=self.dimension,
+            environment=env,
         )
+        
+        # Warn if production
+        if env == "production":
+            logger.warning(
+                "⚠️  PineconeStore initialized in PRODUCTION environment",
+                index_name=self.index_name,
+                environment=env,
+                message="All operations will affect production data. Exercise extreme caution."
+            )
     
     def _get_or_create_index(self):
         """Get existing index or create a new one if it doesn't exist"""
@@ -308,6 +321,15 @@ class PineconeStore:
                         UUID(expected_clone_id),
                     )
             
+            # WARNING: Delete without namespace affects global index (all namespaces)
+            # This is dangerous in production
+            if not namespace:
+                from src.utils.environment import warn_if_production
+                warn_if_production(
+                    f"⚠️  DELETE OPERATION WITHOUT NAMESPACE: This will delete vectors globally across all namespaces in index '{self.index_name}'. "
+                    "This is extremely dangerous in production. Consider using CloneVectorStore which enforces namespace isolation."
+                )
+            
             delete_kwargs = {}
             if namespace:
                 delete_kwargs["namespace"] = namespace
@@ -369,9 +391,33 @@ class PineconeStore:
             return 0
     
     def reset(self) -> bool:
-        """Reset the index (delete all vectors)"""
+        """
+        Reset the index (delete all vectors).
+        
+        WARNING: This operation is BLOCKED in production for safety.
+        This deletes and recreates the entire index, destroying all data across all namespaces.
+        """
+        from src.utils.environment import require_development
+        
+        # CRITICAL SAFETY: Block reset in production
+        try:
+            with require_development(f"PineconeStore.reset() for index '{self.index_name}'"):
+                pass
+        except RuntimeError as e:
+            logger.error(
+                "Reset operation blocked in production",
+                index_name=self.index_name,
+                error=str(e)
+            )
+            raise
+        
         try:
             # Delete the index and recreate it
+            logger.warning(
+                "Resetting Pinecone index (destructive operation)",
+                index_name=self.index_name,
+                environment="development"
+            )
             self.pc.delete_index(self.index_name)
             # Wait a moment
             import time

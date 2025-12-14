@@ -227,11 +227,19 @@ class CloneVectorStore:
         WARNING: This deletes all vectors in this clone's namespace only.
         Other clones' data remains untouched due to namespace isolation.
         """
+        from src.utils.environment import warn_if_production
+        
         logger.warning(
             "Resetting clone namespace",
             clone_id=str(self.clone_id),
             tenant_id=str(self.tenant_id),
             namespace=self.namespace
+        )
+        
+        # Warn if production (less critical since namespace-scoped, but still warn)
+        warn_if_production(
+            f"⚠️  Resetting clone namespace in PRODUCTION: This will delete all vectors for clone {self.clone_id} "
+            f"in namespace '{self.namespace}'. This operation cannot be undone."
         )
         # Delete all vectors in this namespace by querying and deleting
         # Use a dummy query to get all vectors in the namespace

@@ -641,6 +641,10 @@ Note: Environment variable PINECONE_INDEX_NAME takes precedence if set.
 
 def main():
     """Run all Pinecone connection tests"""
+    # Default to development environment if not set (safety)
+    if not os.getenv("ENVIRONMENT"):
+        os.environ["ENVIRONMENT"] = "development"
+    
     # Parse arguments
     args = parse_args()
     
@@ -652,6 +656,10 @@ def main():
         print_info(f"Using index: {args.index} (default for dev testing)")
     else:
         print_info(f"Using index from environment: {settings.pinecone_index_name}")
+    
+    # Log environment for safety
+    env = os.getenv("ENVIRONMENT", "development")
+    print_info(f"Environment: {env}")
     
     print(f"\n{Colors.BOLD}{Colors.CYAN}")
     print("╔════════════════════════════════════════════════════════════╗")
