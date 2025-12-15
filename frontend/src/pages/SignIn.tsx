@@ -138,7 +138,7 @@ const SignIn = () => {
                   footerActionLink: "text-primary hover:text-primary/80",
                 },
               }}
-              routing="path"
+              routing="hash"
               path="/sign-in"
               signUpUrl={ROUTES.SIGN_UP}
               forceRedirectUrl={ROUTES.TRAINING}
