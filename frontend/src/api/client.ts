@@ -40,25 +40,25 @@ export const apiClient = {
   },
 
   get<T>(endpoint: string): Promise<T> {
-    return this.request<T>(endpoint, { method: "GET" });
+    return apiClient.request<T>(endpoint, { method: "GET" });
   },
 
   post<T>(endpoint: string, data?: unknown): Promise<T> {
-    return this.request<T>(endpoint, {
+    return apiClient.request<T>(endpoint, {
       method: "POST",
       body: data ? JSON.stringify(data) : undefined,
     });
   },
 
   put<T>(endpoint: string, data?: unknown): Promise<T> {
-    return this.request<T>(endpoint, {
+    return apiClient.request<T>(endpoint, {
       method: "PUT",
       body: data ? JSON.stringify(data) : undefined,
     });
   },
 
   delete<T>(endpoint: string): Promise<T> {
-    return this.request<T>(endpoint, { method: "DELETE" });
+    return apiClient.request<T>(endpoint, { method: "DELETE" });
   },
 
   // Documents endpoints

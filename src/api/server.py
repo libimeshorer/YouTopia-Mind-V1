@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from src.api.routers import documents, insights, training
 from src.utils.logging import get_logger
-from src.config import settings
+from src.config.settings import settings
 from src.utils.environment import (
     log_environment_info,
     validate_environment_config,
