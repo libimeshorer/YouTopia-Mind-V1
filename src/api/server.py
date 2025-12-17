@@ -24,15 +24,16 @@ app = FastAPI(
 
 # Configure CORS
 # Allow Vercel frontend and localhost for development
-# In production, replace with your actual Vercel domain
 import os
 cors_origins = [
     "http://localhost:5173",  # Vite dev server
     "http://localhost:3000",  # Alternative dev port
     "http://localhost:5174",  # Alternative Vite port
+    "https://you-topia.ai",  # Production frontend domain
+    "https://www.you-topia.ai",  # Production frontend domain with www
 ]
 
-# Add Vercel domains from environment
+# Add Vercel domains from environment (for preview deployments)
 vercel_url = os.getenv("VERCEL_URL")
 if vercel_url:
     cors_origins.append(f"https://{vercel_url}")

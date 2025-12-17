@@ -1,11 +1,19 @@
 /**
  * API client for backend communication
- * TODO: Configure with actual backend URL
  */
 
 import { Document, Insight, CloneAction, Conversation, Integration, TrainingStatus } from "@/types";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+
+// Log API URL for debugging (only in development)
+if (import.meta.env.DEV) {
+  console.log("🔗 API Base URL:", API_BASE_URL);
+  if (!import.meta.env.VITE_API_URL) {
+    console.warn("⚠️ VITE_API_URL not set - using default localhost:8000");
+    console.warn("   Set VITE_API_URL environment variable to your backend URL");
+  }
+}
 
 export const apiClient = {
   baseURL: API_BASE_URL,
@@ -76,9 +84,10 @@ export const apiClient = {
       } catch (error) {
         // Handle network errors (failed to fetch)
         if (error instanceof TypeError && error.message.includes("fetch")) {
-          throw new Error(
-            `Failed to connect to server. Please check that the backend is running at ${API_BASE_URL}`
-          );
+          const errorMsg = API_BASE_URL.includes("localhost") 
+            ? `Failed to connect to backend at ${API_BASE_URL}. If deployed, set VITE_API_URL environment variable to your backend URL (e.g., https://api.you-topia.ai)`
+            : `Failed to connect to backend at ${API_BASE_URL}. Please verify the backend is running and accessible.`;
+          throw new Error(errorMsg);
         }
         // Re-throw other errors as-is
         throw error;
@@ -113,9 +122,10 @@ export const apiClient = {
         return await response.json();
       } catch (error) {
         if (error instanceof TypeError && error.message.includes("fetch")) {
-          throw new Error(
-            `Failed to connect to server. Please check that the backend is running at ${API_BASE_URL}`
-          );
+          const errorMsg = API_BASE_URL.includes("localhost") 
+            ? `Failed to connect to backend at ${API_BASE_URL}. If deployed, set VITE_API_URL environment variable to your backend URL (e.g., https://api.you-topia.ai)`
+            : `Failed to connect to backend at ${API_BASE_URL}. Please verify the backend is running and accessible.`;
+          throw new Error(errorMsg);
         }
         throw error;
       }
@@ -185,9 +195,10 @@ export const apiClient = {
         return await response.json();
       } catch (error) {
         if (error instanceof TypeError && error.message.includes("fetch")) {
-          throw new Error(
-            `Failed to connect to server. Please check that the backend is running at ${API_BASE_URL}`
-          );
+          const errorMsg = API_BASE_URL.includes("localhost") 
+            ? `Failed to connect to backend at ${API_BASE_URL}. If deployed, set VITE_API_URL environment variable to your backend URL (e.g., https://api.you-topia.ai)`
+            : `Failed to connect to backend at ${API_BASE_URL}. Please verify the backend is running and accessible.`;
+          throw new Error(errorMsg);
         }
         throw error;
       }

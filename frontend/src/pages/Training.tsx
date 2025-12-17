@@ -113,8 +113,16 @@ const Training = () => {
             </p>
             {statusError && (
               <div className="mt-4 p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
-                <p className="text-sm text-yellow-600 dark:text-yellow-400">
-                  ⚠️ Unable to connect to the backend. You can still explore the interface, but data won't be saved.
+                <p className="text-sm text-yellow-600 dark:text-yellow-400 font-medium mb-2">
+                  ⚠️ Unable to connect to the backend
+                </p>
+                <p className="text-xs text-yellow-600/80 dark:text-yellow-400/80">
+                  {import.meta.env.VITE_API_URL 
+                    ? `Backend URL is configured as: ${import.meta.env.VITE_API_URL}. Please verify it's correct and the backend is running.`
+                    : `VITE_API_URL environment variable is not set. Set it to your backend URL (e.g., https://api.you-topia.ai) in your deployment platform (Vercel → Settings → Environment Variables).`}
+                </p>
+                <p className="text-xs text-yellow-600/80 dark:text-yellow-400/80 mt-2">
+                  You can still explore the interface, but data won't be saved.
                 </p>
               </div>
             )}
