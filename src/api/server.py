@@ -1,6 +1,6 @@
 """FastAPI application server"""
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from src.api.routers import documents, insights, training
@@ -101,14 +101,52 @@ async def health_check():
     return {"status": "healthy", "service": "youtopia-mind-api"}
 
 
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    """HTTPException handler with CORS headers"""
+    logger.warning("HTTPException", status_code=exc.status_code, detail=exc.detail, path=request.url.path)
+    
+    # Get origin from request
+    origin = request.headers.get("origin")
+    
+    # Build response
+    response = JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail},
+    )
+    
+    # Add CORS headers if origin is in allowed origins
+    if origin and origin in cors_origins:
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+        response.headers["Access-Control-Allow-Methods"] = "*"
+        response.headers["Access-Control-Allow-Headers"] = "*"
+    
+    return response
+
+
 @app.exception_handler(Exception)
-async def global_exception_handler(request, exc):
-    """Global exception handler"""
+async def global_exception_handler(request: Request, exc: Exception):
+    """Global exception handler with CORS headers"""
     logger.error("Unhandled exception", error=str(exc), path=request.url.path)
-    return JSONResponse(
+    
+    # Get origin from request
+    origin = request.headers.get("origin")
+    
+    # Build response
+    response = JSONResponse(
         status_code=500,
         content={"detail": "Internal server error"},
     )
+    
+    # Add CORS headers if origin is in allowed origins
+    if origin and origin in cors_origins:
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+        response.headers["Access-Control-Allow-Methods"] = "*"
+        response.headers["Access-Control-Allow-Headers"] = "*"
+    
+    return response
 
 
 # Include routers

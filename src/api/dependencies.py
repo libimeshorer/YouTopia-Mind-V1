@@ -38,7 +38,20 @@ def get_clerk_jwks_url() -> str:
     # Fallback: Extract from secret key (simplified approach)
     # Clerk secret keys are in format: sk_test_... or sk_live_...
     # This is a simplified approach - in production, set CLERK_FRONTEND_API env var
-    clerk_key_type = settings.clerk_secret_key.split("_")[1] if "_" in settings.clerk_secret_key else "clerk"
+    if not settings.clerk_secret_key:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="CLERK_SECRET_KEY or CLERK_FRONTEND_API must be configured. Please set CLERK_FRONTEND_API environment variable."
+        )
+    
+    # Safe to access clerk_secret_key now since we checked it's not None
+    if "_" in settings.clerk_secret_key:
+        clerk_key_type = settings.clerk_secret_key.split("_")[1]
+    else:
+        clerk_key_type = "clerk"
+    
+    # Note: This fallback URL format is incorrect and should not be used in production
+    # It's kept as a last resort fallback, but CLERK_FRONTEND_API should always be set
     return f"https://clerk.{clerk_key_type}.lcl.dev/.well-known/jwks.json"
 
 
