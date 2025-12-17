@@ -15,6 +15,28 @@ if (import.meta.env.DEV) {
   }
 }
 
+/**
+ * Get Clerk authentication token if available
+ * Works with Clerk v5 by accessing the Clerk instance from the window object
+ */
+async function getAuthToken(): Promise<string | null> {
+  try {
+    // Access Clerk instance from window (available when ClerkProvider is mounted)
+    if (typeof window !== "undefined") {
+      // @ts-ignore - Clerk is added to window by ClerkProvider
+      const clerk = (window as any).Clerk;
+      if (clerk && clerk.session) {
+        const token = await clerk.session.getToken();
+        return token;
+      }
+    }
+    return null;
+  } catch (error) {
+    // Clerk not available or not authenticated
+    return null;
+  }
+}
+
 export const apiClient = {
   baseURL: API_BASE_URL,
   
@@ -24,16 +46,32 @@ export const apiClient = {
   ): Promise<T> {
     const url = `${API_BASE_URL}${endpoint}`;
     
+    // Get authentication token
+    const token = await getAuthToken();
+    
+    // Build headers
+    const headers: HeadersInit = {
+      ...options.headers,
+    };
+    
+    // Add Content-Type for non-FormData requests
+    if (!(options.body instanceof FormData)) {
+      headers["Content-Type"] = "application/json";
+    }
+    
+    // Add Authorization header if token is available
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    
     const response = await fetch(url, {
       ...options,
-      headers: {
-        "Content-Type": "application/json",
-        ...options.headers,
-      },
+      headers,
     });
 
     if (!response.ok) {
-      throw new Error(`API Error: ${response.statusText}`);
+      const errorText = await response.text().catch(() => response.statusText);
+      throw new Error(`API Error (${response.status}): ${errorText || response.statusText}`);
     }
 
     return response.json();
@@ -69,10 +107,19 @@ export const apiClient = {
       files.forEach((file) => formData.append("files", file));
       
       try {
+        // Get authentication token
+        const token = await getAuthToken();
+        
+        const headers: HeadersInit = {};
+        if (token) {
+          headers["Authorization"] = `Bearer ${token}`;
+        }
+        // Don't set Content-Type header - browser will set it with boundary for FormData
+        
         const response = await fetch(`${API_BASE_URL}/api/clone/documents`, {
           method: "POST",
+          headers,
           body: formData,
-          // Don't set Content-Type header - browser will set it with boundary for FormData
         });
 
         if (!response.ok) {
@@ -109,8 +156,18 @@ export const apiClient = {
       formData.append("audio", audioBlob, "recording.webm");
       
       try {
+        // Get authentication token
+        const token = await getAuthToken();
+        
+        const headers: HeadersInit = {};
+        if (token) {
+          headers["Authorization"] = `Bearer ${token}`;
+        }
+        // Don't set Content-Type header - browser will set it with boundary for FormData
+        
         const response = await fetch(`${API_BASE_URL}/api/clone/insights/voice`, {
           method: "POST",
+          headers,
           body: formData,
         });
 
@@ -182,8 +239,18 @@ export const apiClient = {
       formData.append("audio", audioBlob, "recording.webm");
       
       try {
+        // Get authentication token
+        const token = await getAuthToken();
+        
+        const headers: HeadersInit = {};
+        if (token) {
+          headers["Authorization"] = `Bearer ${token}`;
+        }
+        // Don't set Content-Type header - browser will set it with boundary for FormData
+        
         const response = await fetch(`${API_BASE_URL}/api/clone/transcribe`, {
           method: "POST",
+          headers,
           body: formData,
         });
 
