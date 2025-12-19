@@ -9,7 +9,7 @@ from typing import Optional
 from dataclasses import dataclass
 from uuid import UUID
 from src.database.db import get_db
-from src.database.models import User, Tenant, Clone
+from src.database.models import Tenant, Clone
 from src.config.settings import settings
 from src.utils.logging import get_logger
 
@@ -198,6 +198,16 @@ def get_clone_context(
             detail="Token missing user ID"
         )
     
+    # Extract org info from JWT
+    org_info = payload.get("org", {})
+    org_id = org_info.get("id") if org_info else None
+    org_name = org_info.get("name", "") if org_info else ""
+    
+    # Extract user info from JWT
+    first_name = payload.get("first_name") or payload.get("given_name")
+    last_name = payload.get("last_name") or payload.get("family_name")
+    email = payload.get("email")
+    
     # Get or create Clone first
     clone = db.query(Clone).filter(Clone.clerk_user_id == clerk_user_id).first()
     
@@ -210,70 +220,57 @@ def get_clone_context(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Clone has invalid tenant_id"
             )
+        
+        # Update clone info if available (in case JWT has updated info)
+        if first_name and clone.first_name != first_name:
+            clone.first_name = first_name
+        if last_name and clone.last_name != last_name:
+            clone.last_name = last_name
+        if email and clone.email != email:
+            clone.email = email
+        if clone.first_name or clone.last_name or clone.email:
+            db.commit()
     else:
         # New clone signup - create tenant and clone
-        # TODO: Update this logic when onboarding enterprise customers with multiple clones per tenant
-        # For now: Create 1:1 tenant per clone (solopreneur model)
-        # Future: Extract org_id from JWT, look up existing tenant, or create new tenant based on org
-        
-        # Create new tenant for this clone
-        tenant = Tenant(
-            name=f"Tenant id for {clerk_user_id[:8]}",  # TODO: Use better naming when multi-clone support added
-            clerk_org_id=None  # TODO: Extract from JWT org_id claim for enterprise customers
-        )
-        db.add(tenant)
-        db.commit()
-        db.refresh(tenant)
+        # Find or create tenant based on org_id
+        if org_id:
+            # Enterprise: find existing tenant by org_id
+            tenant = db.query(Tenant).filter(Tenant.clerk_org_id == org_id).first()
+            if not tenant:
+                tenant = Tenant(
+                    name=org_name or f"Organization {org_id[:8]}",
+                    clerk_org_id=org_id
+                )
+                db.add(tenant)
+                db.commit()
+                db.refresh(tenant)
+        else:
+            # Solopreneur: create personal tenant
+            user_name = f"{first_name or ''} {last_name or ''}".strip() or f"User {clerk_user_id[:8]}"
+            tenant = Tenant(
+                name=f"Personal workspace for {user_name}",
+                clerk_org_id=None
+            )
+            db.add(tenant)
+            db.commit()
+            db.refresh(tenant)
         
         # Create clone linked to tenant
         clone = Clone(
             tenant_id=tenant.id,
             clerk_user_id=clerk_user_id,
-            name=payload.get("name", "Clone"),
+            first_name=first_name,
+            last_name=last_name,
+            email=email,
             status="active"
         )
         db.add(clone)
         db.commit()
         db.refresh(clone)
-        logger.info("Created new clone with tenant", clone_id=str(clone.id), tenant_id=str(tenant.id))
+        logger.info("Created new clone with tenant", clone_id=str(clone.id), tenant_id=str(tenant.id), org_id=org_id)
     
     return CloneContext(clone_id=clone.id, tenant_id=tenant.id, clone=clone)
 
 
-def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
-    db: Session = Depends(get_db)
-) -> User:
-    """
-    DEPRECATED: Use get_clone_context() instead.
-    FastAPI dependency to get the current authenticated user.
-    Verifies Clerk JWT token and returns the User model.
-    Kept for backward compatibility during migration.
-    """
-    token = credentials.credentials
-    
-    # Verify token
-    payload = verify_clerk_token(token)
-    
-    # Extract user ID from token
-    # Clerk tokens typically have 'sub' or 'userId' claim
-    clerk_user_id = payload.get("sub") or payload.get("userId")
-    
-    if not clerk_user_id:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token missing user ID"
-        )
-    
-    # Get or create user in database
-    user = db.query(User).filter(User.clerk_user_id == clerk_user_id).first()
-    
-    if not user:
-        # Create new user
-        user = User(clerk_user_id=clerk_user_id)
-        db.add(user)
-        db.commit()
-        db.refresh(user)
-        logger.info("Created new user", clerk_user_id=clerk_user_id, user_id=str(user.id))
-    
-    return user
+# DEPRECATED: get_current_user() removed - User model no longer exists
+# Use get_clone_context() instead

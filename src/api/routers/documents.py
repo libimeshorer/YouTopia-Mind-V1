@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File,
 from sqlalchemy.orm import Session
 from typing import List, Optional
 import uuid
+import hashlib
 from datetime import datetime
 from src.api.dependencies import get_clone_context, CloneContext, get_db
 from src.database.models import Document
@@ -96,6 +97,32 @@ async def upload_documents(
             file_bytes = await file.read()
             file_size = len(file_bytes)
             
+            # Calculate file hash for duplicate detection
+            file_hash = hashlib.sha256(file_bytes).hexdigest()
+            
+            # Check for duplicate documents (same hash for this clone)
+            existing_doc = db.query(Document).filter(
+                Document.clone_id == clone_ctx.clone_id,
+                Document.file_hash == file_hash
+            ).first()
+            
+            if existing_doc:
+                logger.info("Duplicate document detected", file_hash=file_hash, existing_doc_id=str(existing_doc.id), filename=file.filename)
+                # Return existing document instead of creating duplicate
+                uploaded_documents.append(
+                    DocumentResponse(
+                        id=str(existing_doc.id),
+                        name=existing_doc.name,
+                        size=existing_doc.size,
+                        type=existing_doc.type,
+                        status=existing_doc.status,
+                        uploadedAt=existing_doc.uploaded_at.isoformat(),
+                        chunksExtracted=existing_doc.chunks_count,
+                        errorMessage=existing_doc.error_message,
+                    )
+                )
+                continue  # Skip to next file
+            
             # Generate S3 key with tenant_id and clone_id
             doc_id = uuid.uuid4()
             s3_key = f"documents/{clone_ctx.tenant_id}/{clone_ctx.clone_id}/{doc_id}/{file.filename}"
@@ -107,6 +134,7 @@ async def upload_documents(
                 name=file.filename,
                 size=file_size,
                 type=file_ext or "application/octet-stream",
+                file_hash=file_hash,
                 status="pending",
                 s3_key=s3_key,
             )
