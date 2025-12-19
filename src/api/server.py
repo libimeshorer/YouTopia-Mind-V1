@@ -17,7 +17,7 @@ logger = get_logger(__name__)
 
 # Create FastAPI app
 app = FastAPI(
-    title="YouTopia Mind API",
+    title="YouTopia Mind FastAPI app",
     description="Backend API for YouTopia Mind AI Clone Platform",
     version="1.0.0",
 )
