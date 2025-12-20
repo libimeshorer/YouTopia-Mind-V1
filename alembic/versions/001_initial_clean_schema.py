@@ -215,12 +215,18 @@ def upgrade() -> None:
         sa.Column('documents_count', sa.Integer(), nullable=False, server_default='0'),
         sa.Column('insights_count', sa.Integer(), nullable=False, server_default='0'),
         sa.Column('integrations_count', sa.Integer(), nullable=False, server_default='0'),
-        sa.Column('thresholds_json', sa.JSON(), nullable=False, server_default=sa.text("'{\"minDocuments\":1,\"minInsights\":1,\"minIntegrations\":1}'::json")),
-        sa.Column('achievements_json', sa.JSON(), nullable=False, server_default=sa.text("'[]'::json")),
+        sa.Column('thresholds_json', sa.JSON(), nullable=False),
+        sa.Column('achievements_json', sa.JSON(), nullable=False),
         sa.Column('updated_at', sa.DateTime(), nullable=False, server_default=sa.text('now()')),
         sa.ForeignKeyConstraint(['clone_id'], ['clones.id'], ondelete='CASCADE'),
         sa.PrimaryKeyConstraint('clone_id')
     )
+
+    # Set JSON defaults using raw SQL to avoid escaping issues
+    # Use exec_driver_sql to bypass SQLAlchemy's bind parameter processing
+    conn = op.get_bind()
+    conn.exec_driver_sql("ALTER TABLE training_status ALTER COLUMN thresholds_json SET DEFAULT '{\"minDocuments\":1,\"minInsights\":1,\"minIntegrations\":1}'::json")
+    conn.exec_driver_sql("ALTER TABLE training_status ALTER COLUMN achievements_json SET DEFAULT '[]'::json")
     
     # Create integrations table
     op.create_table(

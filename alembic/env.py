@@ -13,7 +13,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 # Import Base and models
 from src.database.db import Base
 from src.database.models import (
-    User, Tenant, Clone, Document, Insight, TrainingStatus, Integration
+    Tenant, Clone, Session, Document, Insight, TrainingStatus, Integration, Message, DataSource
 )
 from src.config.settings import settings
 
