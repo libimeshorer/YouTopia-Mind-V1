@@ -1,15 +1,19 @@
 """initial_clean_schema
 
 Revision ID: 001
-Revises: 
+Revises:
 Create Date: 2025-12-19 00:00:00.000000
 
 Clean schema without User model baggage.
 Includes all improvements: ENUMs, first_name/last_name, email, file_hash, Sessions table.
+
+WARNING: This migration DROPS ALL TABLES. It should only be run once during initial setup.
+For safety, it requires ALLOW_DESTRUCTIVE_MIGRATIONS=true in production.
 """
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
+import os
 
 revision = '001'
 down_revision = None
@@ -18,6 +22,27 @@ depends_on = None
 
 
 def upgrade() -> None:
+    # SAFETY CHECK: Prevent accidental data loss in production
+    env = os.getenv('ENVIRONMENT', 'development')
+    allow_destructive = os.getenv('ALLOW_DESTRUCTIVE_MIGRATIONS', 'false').lower() == 'true'
+
+    if env == 'production' and not allow_destructive:
+        raise Exception(
+            "🛑 DESTRUCTIVE MIGRATION BLOCKED!\n\n"
+            "This migration drops all existing tables and data.\n"
+            "If you're absolutely sure you want to proceed, set:\n"
+            "  ALLOW_DESTRUCTIVE_MIGRATIONS=true\n\n"
+            "For production data, consider:\n"
+            "  1. Backup your database first\n"
+            "  2. Use a proper data migration strategy\n"
+            "  3. Test in staging environment\n"
+        )
+
+    # Log warning for non-production environments
+    if env != 'production':
+        print(f"⚠️  Running destructive migration in {env} environment")
+        print("⚠️  This will drop all existing tables!")
+
     # Drop all existing tables if they exist (fresh start)
     op.execute("DROP TABLE IF EXISTS data_sources CASCADE")
     op.execute("DROP TABLE IF EXISTS messages CASCADE")
