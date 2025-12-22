@@ -1,10 +1,12 @@
 """Insights API router"""
 
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Query
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Query, Request
 from sqlalchemy.orm import Session
 from typing import List, Optional
 import uuid
 from datetime import datetime
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 from src.api.dependencies import get_clone_context, CloneContext, get_db
 from src.database.models import Insight
 from src.services.clone_data_access import CloneDataAccessService
@@ -14,7 +16,13 @@ from pydantic import BaseModel
 
 logger = get_logger(__name__)
 
+# Initialize rate limiter
+limiter = Limiter(key_func=get_remote_address)
+
 router = APIRouter()
+
+# Audio file upload limits
+MAX_AUDIO_SIZE = 25 * 1024 * 1024  # 25MB (reasonable for voice recordings)
 
 
 class InsightResponse(BaseModel):
@@ -66,7 +74,9 @@ async def list_insights(
 
 
 @router.post("/insights", response_model=InsightResponse, status_code=status.HTTP_201_CREATED)
+@limiter.limit("30/minute")  # Limit: 30 text insights per minute per IP
 async def create_insight(
+    request: Request,
     insight_data: InsightCreate,
     clone_ctx: CloneContext = Depends(get_clone_context),
     db: Session = Depends(get_db)
@@ -93,7 +103,9 @@ async def create_insight(
 
 
 @router.post("/insights/voice", response_model=InsightResponse, status_code=status.HTTP_201_CREATED)
+@limiter.limit("20/minute")  # Limit: 20 voice insights per minute per IP
 async def upload_voice_insight(
+    request: Request,
     audio: UploadFile = File(...),
     clone_ctx: CloneContext = Depends(get_clone_context),
     db: Session = Depends(get_db)
@@ -105,9 +117,23 @@ async def upload_voice_insight(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="File must be an audio file"
         )
-    
+
     # Read audio file
     audio_bytes = await audio.read()
+
+    # Validate audio file size
+    audio_size = len(audio_bytes)
+    if audio_size > MAX_AUDIO_SIZE:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"Audio file is too large. Maximum size: {MAX_AUDIO_SIZE / (1024*1024):.0f}MB"
+        )
+
+    if audio_size == 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Audio file is empty"
+        )
     
     # Upload to S3 with tenant_id and clone_id in path
     s3_client = S3Client()

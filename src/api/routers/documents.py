@@ -1,10 +1,12 @@
 """Documents API router"""
 
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Query
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Query, Request
 from sqlalchemy.orm import Session
 from typing import List, Optional
 import uuid
 from datetime import datetime
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 from src.api.dependencies import get_clone_context, CloneContext, get_db
 from src.database.models import Document
 from src.ingestion.document_ingester import DocumentIngester
@@ -16,7 +18,14 @@ from pydantic import BaseModel
 
 logger = get_logger(__name__)
 
+# Initialize rate limiter
+limiter = Limiter(key_func=get_remote_address)
+
 router = APIRouter()
+
+# File upload limits
+MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB
+MAX_FILES_PER_REQUEST = 10
 
 
 class DocumentResponse(BaseModel):
@@ -59,7 +68,9 @@ async def list_documents(
 
 
 @router.post("/documents", response_model=List[DocumentResponse], status_code=status.HTTP_201_CREATED)
+@limiter.limit("10/minute")  # Limit: 10 uploads per minute per IP
 async def upload_documents(
+    request: Request,
     files: List[UploadFile] = File(...),
     clone_ctx: CloneContext = Depends(get_clone_context),
     db: Session = Depends(get_db)
@@ -70,7 +81,14 @@ async def upload_documents(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="No files provided"
         )
-    
+
+    # Validate number of files
+    if len(files) > MAX_FILES_PER_REQUEST:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Too many files. Maximum {MAX_FILES_PER_REQUEST} files per request"
+        )
+
     data_access = CloneDataAccessService(clone_ctx.clone_id, clone_ctx.tenant_id, db)
     vector_store = data_access.get_vector_store()
     
@@ -95,7 +113,20 @@ async def upload_documents(
             # Read file content
             file_bytes = await file.read()
             file_size = len(file_bytes)
-            
+
+            # Validate file size
+            if file_size > MAX_FILE_SIZE:
+                raise HTTPException(
+                    status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                    detail=f"File '{file.filename}' is too large. Maximum size: {MAX_FILE_SIZE / (1024*1024):.0f}MB"
+                )
+
+            if file_size == 0:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"File '{file.filename}' is empty"
+                )
+
             # Generate S3 key with tenant_id and clone_id
             doc_id = uuid.uuid4()
             s3_key = f"documents/{clone_ctx.tenant_id}/{clone_ctx.clone_id}/{doc_id}/{file.filename}"

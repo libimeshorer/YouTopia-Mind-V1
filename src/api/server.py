@@ -3,6 +3,9 @@
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 from src.api.routers import documents, insights, training
 from src.utils.logging import get_logger
 from src.config.settings import settings
@@ -15,12 +18,19 @@ from src.utils.environment import (
 
 logger = get_logger(__name__)
 
+# Initialize rate limiter
+limiter = Limiter(key_func=get_remote_address)
+
 # Create FastAPI app
 app = FastAPI(
     title="YouTopia Mind FastAPI app",
     description="Backend API for YouTopia Mind AI Clone Platform",
     version="1.0.0",
 )
+
+# Add rate limiter to app state
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # Configure CORS
 # Allow Vercel frontend and localhost for development
