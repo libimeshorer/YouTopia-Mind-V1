@@ -1,6 +1,6 @@
 """Verify database schema matches models exactly"""
 
-from sqlalchemy import inspect
+from sqlalchemy import inspect, text
 from src.database.db import engine
 from src.utils.logging import get_logger
 import sys
@@ -92,7 +92,7 @@ def verify_schema():
     with engine.connect() as conn:
         for enum_name in required_enums:
             result = conn.execute(
-                f"SELECT EXISTS (SELECT 1 FROM pg_type WHERE typname = '{enum_name}')"
+                text(f"SELECT EXISTS (SELECT 1 FROM pg_type WHERE typname = '{enum_name}')")
             ).scalar()
             if result:
                 print(f"✓ ENUM '{enum_name}' exists")
