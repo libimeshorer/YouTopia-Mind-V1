@@ -25,10 +25,15 @@ app = FastAPI(
 # Configure CORS
 # Allow Vercel frontend and localhost for development
 import os
+
+# Determine environment
+env = os.getenv("ENVIRONMENT", "development").lower()
+
 cors_origins = [
     "http://localhost:5173",  # Vite dev server
     "http://localhost:3000",  # Alternative dev port
     "http://localhost:5174",  # Alternative Vite port
+    "http://localhost:8080",  # Vite default port
     "https://you-topia.ai",  # Production frontend domain
     "https://www.you-topia.ai",  # Production frontend domain with www
 ]
@@ -37,11 +42,17 @@ cors_origins = [
 vercel_url = os.getenv("VERCEL_URL")
 if vercel_url:
     cors_origins.append(f"https://{vercel_url}")
-    cors_origins.append(f"https://*.{vercel_url.split('.', 1)[1] if '.' in vercel_url else vercel_url}")
+
+# For development environment, allow all Vercel preview deployments using regex
+cors_origin_regex = None
+if env in ("dev", "development"):
+    # Allow all Vercel preview deployments (e.g., https://you-topia-git-*.vercel.app)
+    cors_origin_regex = r"https://.*\.vercel\.app"
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
+    allow_origin_regex=cors_origin_regex,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
