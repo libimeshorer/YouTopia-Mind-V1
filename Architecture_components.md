@@ -2,15 +2,21 @@ Raw Data:
 =======> AWS S3.
 
 Chunks, embeddings: 
-=======> Pinecone
+=======> Pinecone 
 
 Metadata: 
-=======> Postgres, over Render 
+=======> Production: Postgres, over Render 
+=======> Development: Local postgres (docker) 
 
 Frontend: 
-=======> ??
+=======> Production: Vercal
+=======> Development: localhost
 
-API: 
-=======> FastAPI
+Backend API:
+=======> Production: FastAPI web server running on Render 
+=======> Development: localhost
 
-Web server on render.
+Handles authentication (Clerk)
+Manages documents, insights, training data
+Interfaces with Pinecone, S3, PostgreSQL
+Provides CORS-enabled API endpoints
