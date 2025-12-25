@@ -62,9 +62,9 @@ const Training = () => {
     insightsCount: 0,
     integrationsCount: 0,
     thresholds: {
-      minDocuments: 1,
-      minInsights: 1,
-      minIntegrations: 1,
+      minDocuments: 20,
+      minInsights: 0,
+      minIntegrations: 3,
     },
     achievements: [],
   };
