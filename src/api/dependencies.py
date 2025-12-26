@@ -208,7 +208,15 @@ def get_clone_context(
     first_name = payload.get("first_name") or payload.get("given_name")
     last_name = payload.get("last_name") or payload.get("family_name")
     email = payload.get("email")
-    
+
+    # Acquire advisory lock to prevent race condition in tenant/clone creation
+    # This ensures that concurrent requests for the same user are serialized
+    # Lock is automatically released at transaction end
+    db.execute(
+        text("SELECT pg_advisory_xact_lock(hashtext(:user_id))"),
+        {"user_id": clerk_user_id}
+    )
+
     # Get or create Clone first
     clone = db.query(Clone).filter(Clone.clerk_user_id == clerk_user_id).first()
     
