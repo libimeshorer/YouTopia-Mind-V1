@@ -98,7 +98,8 @@ class Document(Base):
     
     s3_key = Column(String, nullable=False)  # S3 object key
     chunks_count = Column(Integer, default=0, nullable=False)  # Number of chunks created
-    
+    is_core = Column(Boolean, default=False, nullable=False)  # Whether this is a core/foundational document
+
     uploaded_at = Column(DateTime, server_default=text('now()'), nullable=False)
     processed_at = Column(DateTime, nullable=True)  # When document was processed and chunks were created
     error_message = Column(Text, nullable=True)  # Error message if status is error

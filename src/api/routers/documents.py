@@ -1,6 +1,6 @@
 """Documents API router"""
 
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Query
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Query, Form
 from sqlalchemy.orm import Session
 from typing import List, Optional
 import uuid
@@ -31,6 +31,7 @@ class DocumentResponse(BaseModel):
     chunksExtracted: Optional[int] = None
     errorMessage: Optional[str] = None
     previewUrl: Optional[str] = None
+    isCore: bool = False
 
     class Config:
         from_attributes = True
@@ -54,6 +55,7 @@ async def list_documents(
             uploadedAt=doc.uploaded_at.isoformat(),
             chunksExtracted=doc.chunks_count,
             errorMessage=doc.error_message,
+            isCore=doc.is_core,
         )
         for doc in documents
     ]
@@ -62,10 +64,11 @@ async def list_documents(
 @router.post("/documents", response_model=List[DocumentResponse], status_code=status.HTTP_201_CREATED)
 async def upload_documents(
     files: List[UploadFile] = File(...),
+    is_core: bool = Form(False),
     clone_ctx: CloneContext = Depends(get_clone_context),
     db: Session = Depends(get_db)
 ):
-    """Upload one or more documents"""
+    """Upload one or more documents. If uploading a single file, can mark as core."""
     if not files:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -119,6 +122,7 @@ async def upload_documents(
                         uploadedAt=existing_doc.uploaded_at.isoformat(),
                         chunksExtracted=existing_doc.chunks_count,
                         errorMessage=existing_doc.error_message,
+                        isCore=existing_doc.is_core,
                     )
                 )
                 continue  # Skip to next file
@@ -137,6 +141,7 @@ async def upload_documents(
                 file_hash=file_hash,
                 status="pending",
                 s3_key=s3_key,
+                is_core=is_core if len(files) == 1 else False,  # Only apply is_core for single file uploads
             )
             db.add(doc)
             db.commit()
@@ -205,6 +210,7 @@ async def upload_documents(
                     uploadedAt=doc.uploaded_at.isoformat(),
                     chunksExtracted=doc.chunks_count,
                     errorMessage=doc.error_message,
+                    isCore=doc.is_core,
                 )
             )
             
@@ -247,6 +253,7 @@ async def get_document(
         uploadedAt=doc.uploaded_at.isoformat(),
         chunksExtracted=doc.chunks_count,
         errorMessage=doc.error_message,
+        isCore=doc.is_core,
     )
 
 
@@ -363,6 +370,46 @@ async def delete_document(
     return None
 
 
+@router.patch("/documents/{document_id}/core", response_model=DocumentResponse)
+async def toggle_document_core(
+    document_id: str,
+    is_core: bool = Query(..., description="Set core status (true/false)"),
+    clone_ctx: CloneContext = Depends(get_clone_context),
+    db: Session = Depends(get_db)
+):
+    """Toggle the is_core status of a document"""
+    try:
+        doc_uuid = uuid.UUID(document_id)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid document ID format"
+        )
+
+    # Validate document access (ensures document belongs to this clone)
+    data_access = CloneDataAccessService(clone_ctx.clone_id, clone_ctx.tenant_id, db)
+    doc = data_access.validate_document_access(doc_uuid)
+
+    # Update is_core status
+    doc.is_core = is_core
+    db.commit()
+    db.refresh(doc)
+
+    logger.info("Document core status updated", document_id=str(doc.id), is_core=is_core)
+
+    return DocumentResponse(
+        id=str(doc.id),
+        name=doc.name,
+        size=doc.size,
+        type=doc.type,
+        status=doc.status,
+        uploadedAt=doc.uploaded_at.isoformat(),
+        chunksExtracted=doc.chunks_count,
+        errorMessage=doc.error_message,
+        isCore=doc.is_core,
+    )
+
+
 @router.get("/documents/search", response_model=List[DocumentResponse])
 async def search_documents(
     q: str = Query(..., description="Search query"),
@@ -387,6 +434,7 @@ async def search_documents(
             uploadedAt=doc.uploaded_at.isoformat(),
             chunksExtracted=doc.chunks_count,
             errorMessage=doc.error_message,
+            isCore=doc.is_core,
         )
         for doc in documents
     ]

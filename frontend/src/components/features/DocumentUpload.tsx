@@ -4,7 +4,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
-import { Upload, File, X, Search, Eye, Trash2, Loader2 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Upload, File, X, Search, Eye, Trash2, Loader2, Star } from "lucide-react";
 import { apiClient } from "@/api/client";
 import { Document } from "@/types";
 import { useToast } from "@/hooks/use-toast";
@@ -18,6 +20,9 @@ export const DocumentUpload = ({ onUploadComplete }: DocumentUploadProps) => {
   const [dragActive, setDragActive] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [uploadingFiles, setUploadingFiles] = useState<Map<string, number>>(new Map());
+  const [showCoreDialog, setShowCoreDialog] = useState(false);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [isCore, setIsCore] = useState(false);
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -27,7 +32,7 @@ export const DocumentUpload = ({ onUploadComplete }: DocumentUploadProps) => {
   });
 
   const uploadMutation = useMutation({
-    mutationFn: async (files: File[]) => {
+    mutationFn: async ({ files, isCore }: { files: File[]; isCore?: boolean }) => {
       const uploadPromises = files.map(async (file) => {
         const fileId = `${file.name}-${Date.now()}`;
         setUploadingFiles((prev) => new Map(prev.set(fileId, 0)));
@@ -45,7 +50,7 @@ export const DocumentUpload = ({ onUploadComplete }: DocumentUploadProps) => {
             });
           }, 200);
 
-          await apiClient.documents.upload([file]);
+          await apiClient.documents.upload([file], isCore);
 
           if (progressInterval) {
             clearInterval(progressInterval);
@@ -117,6 +122,25 @@ export const DocumentUpload = ({ onUploadComplete }: DocumentUploadProps) => {
     mutationFn: (query: string) => apiClient.documents.search(query),
   });
 
+  const toggleCoreMutation = useMutation({
+    mutationFn: ({ id, isCore }: { id: string; isCore: boolean }) =>
+      apiClient.documents.toggleCore(id, isCore),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["documents"] });
+      toast({
+        title: "Document Updated",
+        description: "Core status updated successfully",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Update Failed",
+        description: "Failed to update core status",
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleDrag = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -138,8 +162,14 @@ export const DocumentUpload = ({ onUploadComplete }: DocumentUploadProps) => {
         return ["pdf", "docx", "doc", "txt"].includes(ext || "");
       });
 
-      if (files.length > 0) {
-        uploadMutation.mutate(files);
+      if (files.length === 1) {
+        // Single file - show dialog to ask if it's core
+        setPendingFile(files[0]);
+        setIsCore(false);
+        setShowCoreDialog(true);
+      } else if (files.length > 0) {
+        // Multiple files - upload without core flag
+        uploadMutation.mutate({ files, isCore: false });
       }
     },
     [uploadMutation]
@@ -147,9 +177,32 @@ export const DocumentUpload = ({ onUploadComplete }: DocumentUploadProps) => {
 
   const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
-    if (files.length > 0) {
-      uploadMutation.mutate(files);
+    if (files.length === 1) {
+      // Single file - show dialog to ask if it's core
+      setPendingFile(files[0]);
+      setIsCore(false);
+      setShowCoreDialog(true);
+    } else if (files.length > 0) {
+      // Multiple files - upload without core flag
+      uploadMutation.mutate({ files, isCore: false });
     }
+    // Reset input
+    e.target.value = "";
+  };
+
+  const handleConfirmUpload = () => {
+    if (pendingFile) {
+      uploadMutation.mutate({ files: [pendingFile], isCore });
+      setPendingFile(null);
+      setShowCoreDialog(false);
+      setIsCore(false);
+    }
+  };
+
+  const handleCancelUpload = () => {
+    setPendingFile(null);
+    setShowCoreDialog(false);
+    setIsCore(false);
   };
 
   const handleSearch = (e: React.FormEvent) => {
@@ -306,7 +359,12 @@ export const DocumentUpload = ({ onUploadComplete }: DocumentUploadProps) => {
                   <div className="flex items-center gap-3 flex-1 min-w-0">
                     <File className="w-5 h-5 text-muted-foreground flex-shrink-0" />
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{doc.name}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-medium truncate">{doc.name}</p>
+                        {doc.isCore && (
+                          <Star className="w-4 h-4 text-yellow-500 fill-yellow-500 flex-shrink-0" />
+                        )}
+                      </div>
                       <div className="flex items-center gap-4 text-xs text-muted-foreground">
                         <span>{formatFileSize(doc.size)}</span>
                         <span className={getStatusColor(doc.status)}>
@@ -320,6 +378,15 @@ export const DocumentUpload = ({ onUploadComplete }: DocumentUploadProps) => {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => toggleCoreMutation.mutate({ id: doc.id, isCore: !doc.isCore })}
+                      disabled={toggleCoreMutation.isPending}
+                      title={doc.isCore ? "Unmark as core" : "Mark as core"}
+                    >
+                      <Star className={`w-4 h-4 ${doc.isCore ? "text-yellow-500 fill-yellow-500" : "text-muted-foreground"}`} />
+                    </Button>
                     <DocumentPreview document={doc} />
                     <Button
                       variant="ghost"
@@ -336,6 +403,42 @@ export const DocumentUpload = ({ onUploadComplete }: DocumentUploadProps) => {
           )}
         </CardContent>
       </Card>
+
+      {/* Core Document Dialog */}
+      <Dialog open={showCoreDialog} onOpenChange={setShowCoreDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Upload Document</DialogTitle>
+            <DialogDescription>
+              You're uploading: <strong>{pendingFile?.name}</strong>
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex items-center space-x-2 py-4">
+            <Checkbox
+              id="is-core"
+              checked={isCore}
+              onCheckedChange={(checked) => setIsCore(checked === true)}
+            />
+            <label
+              htmlFor="is-core"
+              className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+            >
+              Mark as core document
+            </label>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            Core documents contain foundational information about you and are prioritized during retrieval.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={handleCancelUpload}>
+              Cancel
+            </Button>
+            <Button onClick={handleConfirmUpload}>
+              Upload
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

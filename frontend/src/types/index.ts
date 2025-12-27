@@ -47,6 +47,7 @@ export interface Document {
   chunksExtracted?: number;
   errorMessage?: string;
   previewUrl?: string;
+  isCore: boolean;
 }
 
 export interface Insight {

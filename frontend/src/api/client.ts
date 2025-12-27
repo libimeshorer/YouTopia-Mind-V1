@@ -102,9 +102,12 @@ export const apiClient = {
   // Documents endpoints
   documents: {
     list: () => apiClient.get<Document[]>("/api/clone/documents"),
-    upload: async (files: File[]) => {
+    upload: async (files: File[], isCore?: boolean) => {
       const formData = new FormData();
       files.forEach((file) => formData.append("files", file));
+      if (isCore !== undefined) {
+        formData.append("is_core", String(isCore));
+      }
       
       try {
         // Get authentication token
@@ -145,6 +148,7 @@ export const apiClient = {
     delete: (id: string) => apiClient.delete(`/api/clone/documents/${id}`),
     status: (id: string) => apiClient.get<Document>(`/api/clone/documents/${id}/status`),
     search: (query: string) => apiClient.get<Document[]>(`/api/clone/documents/search?q=${encodeURIComponent(query)}`),
+    toggleCore: (id: string, isCore: boolean) => apiClient.patch<Document>(`/api/clone/documents/${id}/core?is_core=${isCore}`, {}),
   },
 
   // Insights endpoints
