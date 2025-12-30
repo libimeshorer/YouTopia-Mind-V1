@@ -3,7 +3,7 @@
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from src.api.routers import documents, insights, training
+from src.api.routers import documents, insights, training, integrations
 from src.utils.logging import get_logger
 from src.config.settings import settings
 from src.utils.environment import (
@@ -164,6 +164,7 @@ async def global_exception_handler(request: Request, exc: Exception):
 app.include_router(documents.router, prefix="/api/clone", tags=["documents"])
 app.include_router(insights.router, prefix="/api/clone", tags=["insights"])
 app.include_router(training.router, prefix="/api/clone", tags=["training"])
+app.include_router(integrations.router, prefix="/api/clone", tags=["integrations"])
 
 
 if __name__ == "__main__":
