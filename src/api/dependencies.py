@@ -232,52 +232,78 @@ def get_clone_context(
             )
         
         # Update clone info if available (in case JWT has updated info)
+        updated = False
         if first_name and clone.first_name != first_name:
             clone.first_name = first_name
+            updated = True
         if last_name and clone.last_name != last_name:
             clone.last_name = last_name
+            updated = True
         if email and clone.email != email:
             clone.email = email
-        if clone.first_name or clone.last_name or clone.email:
+            updated = True
+
+        if updated:
             db.commit()
+            db.refresh(clone)
+            logger.info("Updated clone info", clone_id=str(clone.id), tenant_id=str(tenant.id), org_id=org_id)
+
     else:
         # New clone signup - create tenant and clone
-        # Find or create tenant based on org_id
-        if org_id:
-            # Enterprise: find existing tenant by org_id
-            tenant = db.query(Tenant).filter(Tenant.clerk_org_id == org_id).first()
+        # CRITICAL FIX: Re-query for clone after lock acquisition to handle race condition
+        # Another concurrent request may have created the clone while we were waiting for the lock
+        clone = db.query(Clone).filter(Clone.clerk_user_id == clerk_user_id).first()
+        
+        if clone:
+            # Clone was created by another concurrent request while we were waiting for lock
+            tenant = db.query(Tenant).filter(Tenant.id == clone.tenant_id).first()
             if not tenant:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Clone has invalid tenant_id"
+                )
+        else:
+            # Still no clone - proceed with creation
+            # Find or create tenant based on org_id
+            if org_id:
+                # Enterprise: find existing tenant by org_id
+                tenant = db.query(Tenant).filter(Tenant.clerk_org_id == org_id).first()
+                if not tenant:
+                    tenant = Tenant(
+                        name=org_name or f"Organization {org_id[:8]}",
+                        clerk_org_id=org_id
+                    )
+                    db.add(tenant)
+                    # Flush to get tenant.id (doesn't commit, so lock is still held)
+                    db.flush()
+            else:
+                # Solopreneur: create personal tenant
+                user_name = f"{first_name or ''} {last_name or ''}".strip() or f"User {clerk_user_id[:8]}"
                 tenant = Tenant(
-                    name=org_name or f"Organization {org_id[:8]}",
-                    clerk_org_id=org_id
+                    name=f"Tenant for {user_name}",
+                    clerk_org_id=None
                 )
                 db.add(tenant)
-                db.commit()
-                db.refresh(tenant)
-        else:
-            # Solopreneur: create personal tenant
-            user_name = f"{first_name or ''} {last_name or ''}".strip() or f"User {clerk_user_id[:8]}"
-            tenant = Tenant(
-                name=f"Personal workspace for {user_name}",
-                clerk_org_id=None
+                # Flush to get tenant.id (doesn't commit, so lock is still held)
+                db.flush()
+            
+            # Create clone linked to tenant
+            clone = Clone(
+                tenant_id=tenant.id,
+                clerk_user_id=clerk_user_id,
+                first_name=first_name,
+                last_name=last_name,
+                email=email,
+                status="active"
             )
-            db.add(tenant)
+            db.add(clone)
+            
+            # FIX: Commit both tenant and clone in a single transaction
+            # This ensures the advisory lock is held until both are committed
             db.commit()
             db.refresh(tenant)
-        
-        # Create clone linked to tenant
-        clone = Clone(
-            tenant_id=tenant.id,
-            clerk_user_id=clerk_user_id,
-            first_name=first_name,
-            last_name=last_name,
-            email=email,
-            status="active"
-        )
-        db.add(clone)
-        db.commit()
-        db.refresh(clone)
-        logger.info("Created new clone with tenant", clone_id=str(clone.id), tenant_id=str(tenant.id), org_id=org_id)
+            db.refresh(clone)
+            logger.info("Created new clone with tenant", clone_id=str(clone.id), tenant_id=str(tenant.id), org_id=org_id)
     
     return CloneContext(clone_id=clone.id, tenant_id=tenant.id, clone=clone)
 
