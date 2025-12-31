@@ -59,8 +59,8 @@ def calculate_training_status(clone_id, db: Session) -> TrainingStatus:
     
     # Default thresholds
     thresholds = {
-        "minDocuments": 1,
-        "minInsights": 1,
+        "minDocuments": 10,
+        "minInsights": 2,
         "minIntegrations": 1,
     }
     
