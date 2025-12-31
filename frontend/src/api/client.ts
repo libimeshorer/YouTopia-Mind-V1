@@ -2,7 +2,7 @@
  * API client for backend communication
  */
 
-import { Document, Insight, CloneAction, Conversation, Integration, TrainingStatus } from "@/types";
+import { Document, Insight, CloneAction, Conversation, Integration, TrainingStatus, ChatSession, ChatMessage, SendMessageRequest, SendMessageResponse } from "@/types";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -237,17 +237,17 @@ export const apiClient = {
     upload: async (audioBlob: Blob) => {
       const formData = new FormData();
       formData.append("audio", audioBlob, "recording.webm");
-      
+
       try {
         // Get authentication token
         const token = await getAuthToken();
-        
+
         const headers: HeadersInit = {};
         if (token) {
           headers["Authorization"] = `Bearer ${token}`;
         }
         // Don't set Content-Type header - browser will set it with boundary for FormData
-        
+
         const response = await fetch(`${API_BASE_URL}/api/clone/transcribe`, {
           method: "POST",
           headers,
@@ -262,7 +262,7 @@ export const apiClient = {
         return await response.json();
       } catch (error) {
         if (error instanceof TypeError && error.message.includes("fetch")) {
-          const errorMsg = API_BASE_URL.includes("localhost") 
+          const errorMsg = API_BASE_URL.includes("localhost")
             ? `Failed to connect to backend at ${API_BASE_URL}. If deployed, set VITE_API_URL environment variable to your backend URL (e.g., https://api.you-topia.ai)`
             : `Failed to connect to backend at ${API_BASE_URL}. Please verify the backend is running and accessible.`;
           throw new Error(errorMsg);
@@ -271,6 +271,83 @@ export const apiClient = {
       }
     },
     status: (id: string) => apiClient.get<{ status: string; transcription?: string }>(`/api/clone/transcribe/${id}`),
+  },
+
+  // Chat endpoints (PLACEHOLDER - will be implemented in PR #3: Backend)
+  chat: {
+    // Create or resume session for clone owner
+    createSession: async (cloneId: string): Promise<ChatSession> => {
+      // TODO: Replace with real API call in PR #3
+      console.log("📝 PLACEHOLDER: createSession called for cloneId:", cloneId);
+      return {
+        id: 1,
+        cloneId,
+        startedAt: new Date().toISOString(),
+        lastMessageAt: new Date().toISOString(),
+        messageCount: 0,
+        status: 'active',
+      };
+    },
+
+    // Send message and get clone response
+    sendMessage: async (sessionId: number, data: SendMessageRequest): Promise<SendMessageResponse> => {
+      // TODO: Replace with real API call in PR #3
+      console.log("📝 PLACEHOLDER: sendMessage called with:", { sessionId, data });
+
+      // Simulate network delay
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      const userMessage: ChatMessage = {
+        id: `msg-user-${Date.now()}`,
+        sessionId,
+        role: 'external_user',
+        content: data.content,
+        createdAt: new Date().toISOString(),
+        externalUserName: data.externalUserName,
+      };
+
+      const cloneMessage: ChatMessage = {
+        id: `msg-clone-${Date.now()}`,
+        sessionId,
+        role: 'clone',
+        content: `This is a placeholder response to: "${data.content}". The real response will use RAG + LLM when backend is implemented in PR #3.`,
+        createdAt: new Date(Date.now() + 100).toISOString(),
+        ragContext: {
+          chunks: [
+            {
+              content: "Placeholder RAG context chunk 1",
+              score: 0.95,
+              metadata: { source: "placeholder-doc.pdf" }
+            },
+            {
+              content: "Placeholder RAG context chunk 2",
+              score: 0.87,
+              metadata: { source: "placeholder-insight.txt" }
+            }
+          ]
+        },
+        tokensUsed: 150,
+        responseTimeMs: 1500,
+      };
+
+      return {
+        userMessage,
+        cloneMessage,
+      };
+    },
+
+    // Get all messages in a session
+    getMessages: async (sessionId: number): Promise<ChatMessage[]> => {
+      // TODO: Replace with real API call in PR #3
+      console.log("📝 PLACEHOLDER: getMessages called for sessionId:", sessionId);
+      return [];
+    },
+
+    // Submit feedback on a clone message
+    submitFeedback: async (messageId: string, rating: number): Promise<void> => {
+      // TODO: Replace with real API call in PR #3
+      console.log("📝 PLACEHOLDER: submitFeedback called with:", { messageId, rating });
+    },
   },
 };
 
