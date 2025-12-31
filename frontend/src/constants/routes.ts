@@ -11,6 +11,7 @@ export const ROUTES = {
   SETUP: "/setup",
   TRAINING: "/training",
   ACTIVITY: "/activity",
+  CHAT: (cloneId: string) => `/chat/${cloneId}`,
   CLONE: (id: string) => `/clone/${id}`,
   SETUP_CLONE: (id: string) => `/setup/${id}`,
 } as const;

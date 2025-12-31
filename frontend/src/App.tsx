@@ -13,6 +13,7 @@ import SignUp from "./pages/SignUp";
 import Dashboard from "./pages/Dashboard";
 import Training from "./pages/Training";
 import Activity from "./pages/Activity";
+import Chat from "./pages/Chat";
 import NotFound from "./pages/NotFound";
 import ProtectedRoute from "./components/layout/ProtectedRoute";
 
@@ -52,6 +53,14 @@ const AppContent = () => (
             element={
               <ProtectedRoute>
                 <Activity />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/chat/:cloneId"
+            element={
+              <ProtectedRoute>
+                <Chat />
               </ProtectedRoute>
             }
           />
