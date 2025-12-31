@@ -11,6 +11,12 @@ import { useToast } from "@/hooks/use-toast";
 import { VoiceRecorder } from "./VoiceRecorder";
 
 export const InsightsManager = () => {
+  // TODO: Change ENABLE_SEARCH to true to make search active. Also needs to be fixed in backend:
+  // - Fix filteredInsights logic to show empty array when searchQuery exists but searchMutation.data is undefined
+  // - Add loading state during search
+  // - Add error handling for search failures
+  const ENABLE_SEARCH = false;
+  
   const [textInput, setTextInput] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -198,37 +204,39 @@ export const InsightsManager = () => {
       </Card>
 
       {/* Search */}
-      <Card>
-        <CardContent className="pt-6">
-          <form onSubmit={handleSearch} className="flex gap-2">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input
-                type="text"
-                placeholder="Search insights..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10"
-              />
-            </div>
-            <Button type="submit" variant="outline">
-              Search
-            </Button>
-            {searchQuery && (
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => {
-                  setSearchQuery("");
-                  searchMutation.reset();
-                }}
-              >
-                Clear
+      {ENABLE_SEARCH && (
+        <Card>
+          <CardContent className="pt-6">
+            <form onSubmit={handleSearch} className="flex gap-2">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  type="text"
+                  placeholder="Search insights..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+              <Button type="submit" variant="outline">
+                Search
               </Button>
-            )}
-          </form>
-        </CardContent>
-      </Card>
+              {searchQuery && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => {
+                    setSearchQuery("");
+                    searchMutation.reset();
+                  }}
+                >
+                  Clear
+                </Button>
+              )}
+            </form>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Insights List */}
       <Card>
