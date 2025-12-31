@@ -2,13 +2,16 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
-import { Mic, Save, Edit, Trash2, Play, Search, Loader2 } from "lucide-react";
+import { Mic, Save, Edit, Trash2, Play, Search, Loader2, Lock, Sparkles } from "lucide-react";
 import { apiClient } from "@/api/client";
 import { Insight } from "@/types";
 import { useToast } from "@/hooks/use-toast";
 import { VoiceRecorder } from "./VoiceRecorder";
+import { useUser } from "@clerk/clerk-react";
 
 export const InsightsManager = () => {
   // TODO: Change ENABLE_SEARCH to true to make search active. Also needs to be fixed in backend:
@@ -20,8 +23,18 @@ export const InsightsManager = () => {
   const [textInput, setTextInput] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [showUpgradeDialog, setShowUpgradeDialog] = useState(false);
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { user } = useUser();
+
+  // TODO: Replace with actual premium check from your backend API
+  // This could be: user?.publicMetadata?.subscriptionTier === 'premium'
+  // or fetched from your API endpoint (e.g., apiClient.user.subscription())
+  // For now, checking Clerk's publicMetadata as a placeholder
+  const isPremium = (user?.publicMetadata?.isPremium === true) || 
+                    (user?.publicMetadata?.subscriptionTier === 'premium') ||
+                    false; // Default to false for now
 
   const { data: insights = [], isLoading } = useQuery<Insight[]>({
     queryKey: ["insights"],
@@ -134,21 +147,101 @@ export const InsightsManager = () => {
 
   return (
     <div className="space-y-6">
-      {/* Voice Recording */}
-      <Card>
+      {/* Voice Recording - Premium Feature */}
+      <Card className="relative">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Mic className="w-5 h-5" />
             Record Voice Insight
+            {!isPremium && (
+              <Badge variant="secondary" className="ml-auto">
+                <Sparkles className="w-3 h-3 mr-1" />
+                Premium
+              </Badge>
+            )}
           </CardTitle>
         </CardHeader>
-        <CardContent>
-          <VoiceRecorder
-            onTranscriptionComplete={(transcription) => {
-              setTextInput(transcription);
-            }}
-            onSave={handleSaveVoice}
-          />
+        <CardContent className="relative">
+          {!isPremium ? (
+            // Premium Locked State - Blurred Overlay
+            <div className="relative">
+              {/* Blurred background */}
+              <div className="blur-sm pointer-events-none select-none opacity-50">
+                <VoiceRecorder
+                  onTranscriptionComplete={() => {}}
+                  onSave={() => {}}
+                />
+              </div>
+              
+              {/* Overlay content */}
+              <div className="absolute inset-0 flex items-center justify-center bg-background/80 backdrop-blur-sm rounded-lg">
+                <div className="text-center space-y-4 p-6 max-w-sm">
+                  <div className="mx-auto w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
+                    <Lock className="w-8 h-8 text-primary" />
+                  </div>
+                  <div className="space-y-2">
+                    <h3 className="text-lg font-semibold">Voice Insights are Premium</h3>
+                    <p className="text-sm text-muted-foreground">
+                      Upgrade to unlock voice recording and instant transcription for your insights.
+                    </p>
+                  </div>
+                  <Dialog open={showUpgradeDialog} onOpenChange={setShowUpgradeDialog}>
+                    <DialogTrigger asChild>
+                      <Button className="bg-gradient-primary hover:shadow-glow">
+                        <Sparkles className="w-4 h-4 mr-2" />
+                        Upgrade to Premium
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle>Upgrade to Premium</DialogTitle>
+                        <DialogDescription>
+                          Unlock voice insights and other premium features.
+                        </DialogDescription>
+                      </DialogHeader>
+                      <div className="space-y-4 py-4">
+                        <div className="space-y-2">
+                          <h4 className="font-semibold">Premium Features:</h4>
+                          <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
+                            <li>Voice insight recording</li>
+                            <li>Instant transcription</li>
+                            <li>Advanced AI features</li>
+                            <li>Priority support</li>
+                          </ul>
+                        </div>
+                      </div>
+                      <DialogFooter>
+                        <Button variant="outline" onClick={() => setShowUpgradeDialog(false)}>
+                          Maybe Later
+                        </Button>
+                        <Button 
+                          onClick={() => {
+                            // TODO: Navigate to your payment/subscription page
+                            // navigate('/upgrade') or open Stripe checkout
+                            toast({
+                              title: "Redirecting to upgrade...",
+                              description: "You'll be redirected to complete your upgrade.",
+                            });
+                            setShowUpgradeDialog(false);
+                          }}
+                        >
+                          Upgrade Now
+                        </Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
+                </div>
+              </div>
+            </div>
+          ) : (
+            // Premium User - Full Access
+            <VoiceRecorder
+              onTranscriptionComplete={(transcription) => {
+                setTextInput(transcription);
+              }}
+              onSave={handleSaveVoice}
+            />
+          )}
         </CardContent>
       </Card>
 
