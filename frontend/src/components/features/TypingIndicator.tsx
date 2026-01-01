@@ -1,3 +1,18 @@
+/**
+ * TypingIndicator Component
+ *
+ * Animated "typing" indicator shown while waiting for the clone's response.
+ * Displays three bouncing dots in a message bubble to indicate activity.
+ *
+ * Features:
+ * - Three animated dots with staggered timing
+ * - Consistent styling with clone message bubbles
+ * - Bot avatar for visual consistency
+ *
+ * @example
+ * {isTyping && <TypingIndicator />}
+ */
+
 import { Card } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Bot } from "lucide-react";

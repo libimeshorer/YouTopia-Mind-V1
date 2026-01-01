@@ -1,3 +1,26 @@
+/**
+ * ChatMessageBubble Component
+ *
+ * Renders an individual chat message with appropriate styling based on sender (user vs clone).
+ * Displays message content, metadata, RAG sources (for clone responses), and feedback controls.
+ *
+ * Features:
+ * - User messages: Right-aligned with purple gradient background
+ * - Clone messages: Left-aligned with card styling
+ * - Expandable RAG sources (show/hide toggle)
+ * - Feedback buttons (thumbs up/down) for clone responses
+ * - Timestamp and performance metrics display
+ * - Optimistic UI updates for feedback
+ *
+ * @example
+ * <ChatMessageBubble
+ *   message={chatMessage}
+ *   isUser={false}
+ *   cloneName="Tiffany"
+ *   onFeedback={(rating) => submitFeedback(rating)}
+ * />
+ */
+
 import { ChatMessage } from "@/types";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -18,24 +41,19 @@ export const ChatMessageBubble = ({
   cloneName = "AI",
   onFeedback,
 }: ChatMessageBubbleProps) => {
-  // FIX: Derive feedbackGiven from message prop instead of local state
-  // This ensures it stays in sync when message updates
-  const feedbackGiven = message.feedbackRating !== undefined && message.feedbackRating !== null;
+  const [feedbackGiven, setFeedbackGiven] = useState(
+    message.feedbackRating !== undefined && message.feedbackRating !== null
+  );
   const [showSources, setShowSources] = useState(false);
-  const [localFeedbackGiven, setLocalFeedbackGiven] = useState(false);
 
   const handleFeedback = (rating: number) => {
     if (onFeedback) {
       onFeedback(rating);
-      setLocalFeedbackGiven(true); // Optimistic UI update
+      setFeedbackGiven(true);
     }
   };
 
-  // FIX: Safe optional chaining instead of non-null assertions
   const hasSources = !isUser && message.ragContext && message.ragContext.chunks.length > 0;
-
-  // Show feedback buttons only if not given feedback (check both prop and local state)
-  const showFeedbackButtons = !isUser && onFeedback && !feedbackGiven && !localFeedbackGiven;
 
   return (
     <div className={`flex gap-3 ${isUser ? "flex-row-reverse" : "flex-row"} mb-4`}>
@@ -61,8 +79,8 @@ export const ChatMessageBubble = ({
           </p>
         </Card>
 
-        {/* RAG Sources (Clone messages only) - FIX: Safe optional chaining */}
-        {hasSources && message.ragContext && (
+        {/* RAG Sources (Clone messages only) */}
+        {hasSources && (
           <div className="mt-2 w-full">
             <Button
               variant="ghost"
@@ -78,7 +96,7 @@ export const ChatMessageBubble = ({
               ) : (
                 <>
                   <ChevronDown className="w-3 h-3 mr-1" />
-                  Show sources ({message.ragContext.chunks.length})
+                  Show sources ({message.ragContext!.chunks.length})
                 </>
               )}
             </Button>
@@ -89,7 +107,7 @@ export const ChatMessageBubble = ({
                   Sources used:
                 </p>
                 <div className="space-y-2">
-                  {message.ragContext.chunks.map((chunk, idx) => (
+                  {message.ragContext!.chunks.map((chunk, idx) => (
                     <div key={idx} className="text-xs">
                       <p className="text-muted-foreground line-clamp-2">
                         "{chunk.content}"
@@ -122,7 +140,7 @@ export const ChatMessageBubble = ({
           )}
 
           {/* Feedback buttons (Clone messages only) */}
-          {showFeedbackButtons && (
+          {!isUser && onFeedback && !feedbackGiven && (
             <div className="flex gap-1 ml-2">
               <Button
                 variant="ghost"

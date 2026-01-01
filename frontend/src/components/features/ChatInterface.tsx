@@ -1,3 +1,21 @@
+/**
+ * ChatInterface Component
+ *
+ * Main chat container that manages the conversational interface between the clone owner and their AI clone.
+ * Handles session management, message state, and real-time chat interactions.
+ *
+ * Features:
+ * - Auto-creates/resumes single persistent session per clone owner
+ * - "New Conversation" button to start fresh sessions
+ * - Real-time message sending with typing indicators
+ * - Feedback submission (thumbs up/down)
+ * - RAG source display
+ * - Error handling with user-friendly toasts
+ *
+ * @example
+ * <ChatInterface cloneId="abc-123" cloneName="Tiffany" />
+ */
+
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { ChatMessage, ChatSession } from "@/types";
@@ -23,7 +41,6 @@ export const ChatInterface = ({
   const [sessionId, setSessionId] = useState<number | undefined>(undefined);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isTyping, setIsTyping] = useState(false);
-  const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -33,49 +50,19 @@ export const ChatInterface = ({
     queryKey: ["chatSession", cloneId],
     queryFn: async () => {
       const newSession = await apiClient.chat.createSession(cloneId);
+      setSessionId(newSession.id);
       return newSession;
     },
   });
 
-  // Extract sessionId from query result (FIX: No side effects in queryFn)
+  // Load messages when session is ready
   useEffect(() => {
-    if (session?.id) {
-      setSessionId(session.id);
-    }
-  }, [session]);
-
-  // Load messages when session is ready (FIX: Error handling + cleanup)
-  useEffect(() => {
-    if (!sessionId) return;
-
-    let isMounted = true; // Cleanup flag
-    setIsLoadingMessages(true);
-
-    apiClient.chat
-      .getMessages(sessionId)
-      .then((loadedMessages) => {
-        if (isMounted) {
-          setMessages(loadedMessages);
-          setIsLoadingMessages(false);
-        }
-      })
-      .catch((error) => {
-        if (isMounted) {
-          console.error("Failed to load messages:", error);
-          setIsLoadingMessages(false);
-          toast({
-            title: "Error loading messages",
-            description: "Could not load conversation history.",
-            variant: "destructive",
-          });
-        }
+    if (sessionId) {
+      apiClient.chat.getMessages(sessionId).then((loadedMessages) => {
+        setMessages(loadedMessages);
       });
-
-    // Cleanup: prevent state updates after unmount
-    return () => {
-      isMounted = false;
-    };
-  }, [sessionId, toast]);
+    }
+  }, [sessionId]);
 
   // Send message mutation
   const sendMessageMutation = useMutation({
@@ -102,7 +89,7 @@ export const ChatInterface = ({
     },
   });
 
-  // Submit feedback mutation (FIX: Add error handler)
+  // Submit feedback mutation
   const feedbackMutation = useMutation({
     mutationFn: ({ messageId, rating }: { messageId: string; rating: number }) =>
       apiClient.chat.submitFeedback(messageId, rating),
@@ -118,14 +105,6 @@ export const ChatInterface = ({
       toast({
         title: "Feedback submitted",
         description: "Thank you for your feedback!",
-      });
-    },
-    onError: (error) => {
-      console.error("Feedback submission failed:", error);
-      toast({
-        title: "Error",
-        description: "Failed to submit feedback. Please try again.",
-        variant: "destructive",
       });
     },
   });
@@ -185,11 +164,7 @@ export const ChatInterface = ({
 
       {/* Messages */}
       <ScrollArea className="flex-1 p-4">
-        {isLoadingMessages ? (
-          <div className="flex items-center justify-center py-8">
-            <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-          </div>
-        ) : messages.length === 0 && !isTyping ? (
+        {messages.length === 0 && !isTyping ? (
           <Card className="p-8 text-center border-border/50 bg-gradient-secondary">
             <h3 className="text-lg font-semibold mb-2">Start a conversation</h3>
             <p className="text-sm text-muted-foreground">
