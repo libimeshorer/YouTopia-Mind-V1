@@ -1,3 +1,21 @@
+/**
+ * ChatInterface Component
+ *
+ * Main chat container that manages the conversational interface between the clone owner and their AI clone.
+ * Handles session management, message state, and real-time chat interactions.
+ *
+ * Features:
+ * - Auto-creates/resumes single persistent session per clone owner
+ * - "New Conversation" button to start fresh sessions
+ * - Real-time message sending with typing indicators
+ * - Feedback submission (thumbs up/down)
+ * - RAG source display
+ * - Error handling with user-friendly toasts
+ *
+ * @example
+ * <ChatInterface cloneId="abc-123" cloneName="Tiffany" />
+ */
+
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { ChatMessage, ChatSession } from "@/types";

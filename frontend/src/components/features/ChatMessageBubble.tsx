@@ -1,3 +1,26 @@
+/**
+ * ChatMessageBubble Component
+ *
+ * Renders an individual chat message with appropriate styling based on sender (user vs clone).
+ * Displays message content, metadata, RAG sources (for clone responses), and feedback controls.
+ *
+ * Features:
+ * - User messages: Right-aligned with purple gradient background
+ * - Clone messages: Left-aligned with card styling
+ * - Expandable RAG sources (show/hide toggle)
+ * - Feedback buttons (thumbs up/down) for clone responses
+ * - Timestamp and performance metrics display
+ * - Optimistic UI updates for feedback
+ *
+ * @example
+ * <ChatMessageBubble
+ *   message={chatMessage}
+ *   isUser={false}
+ *   cloneName="Tiffany"
+ *   onFeedback={(rating) => submitFeedback(rating)}
+ * />
+ */
+
 import { ChatMessage } from "@/types";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";

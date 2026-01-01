@@ -1,3 +1,23 @@
+/**
+ * ChatInput Component
+ *
+ * Message input area with send button for the chat interface.
+ * Auto-resizes based on content and supports keyboard shortcuts.
+ *
+ * Features:
+ * - Auto-resizing textarea (grows with content, max 200px)
+ * - Enter to send, Shift+Enter for newline
+ * - Disabled state during message sending
+ * - Send button with gradient styling
+ *
+ * @example
+ * <ChatInput
+ *   onSend={(message) => handleSend(message)}
+ *   disabled={isSending}
+ *   placeholder="Type your message..."
+ * />
+ */
+
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Send } from "lucide-react";
