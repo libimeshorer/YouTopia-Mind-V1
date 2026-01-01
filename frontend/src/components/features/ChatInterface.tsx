@@ -23,6 +23,7 @@ export const ChatInterface = ({
   const [sessionId, setSessionId] = useState<number | undefined>(undefined);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isTyping, setIsTyping] = useState(false);
+  const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -32,19 +33,49 @@ export const ChatInterface = ({
     queryKey: ["chatSession", cloneId],
     queryFn: async () => {
       const newSession = await apiClient.chat.createSession(cloneId);
-      setSessionId(newSession.id);
       return newSession;
     },
   });
 
-  // Load messages when session is ready
+  // Extract sessionId from query result (FIX: No side effects in queryFn)
   useEffect(() => {
-    if (sessionId) {
-      apiClient.chat.getMessages(sessionId).then((loadedMessages) => {
-        setMessages(loadedMessages);
-      });
+    if (session?.id) {
+      setSessionId(session.id);
     }
-  }, [sessionId]);
+  }, [session]);
+
+  // Load messages when session is ready (FIX: Error handling + cleanup)
+  useEffect(() => {
+    if (!sessionId) return;
+
+    let isMounted = true; // Cleanup flag
+    setIsLoadingMessages(true);
+
+    apiClient.chat
+      .getMessages(sessionId)
+      .then((loadedMessages) => {
+        if (isMounted) {
+          setMessages(loadedMessages);
+          setIsLoadingMessages(false);
+        }
+      })
+      .catch((error) => {
+        if (isMounted) {
+          console.error("Failed to load messages:", error);
+          setIsLoadingMessages(false);
+          toast({
+            title: "Error loading messages",
+            description: "Could not load conversation history.",
+            variant: "destructive",
+          });
+        }
+      });
+
+    // Cleanup: prevent state updates after unmount
+    return () => {
+      isMounted = false;
+    };
+  }, [sessionId, toast]);
 
   // Send message mutation
   const sendMessageMutation = useMutation({
@@ -71,7 +102,7 @@ export const ChatInterface = ({
     },
   });
 
-  // Submit feedback mutation
+  // Submit feedback mutation (FIX: Add error handler)
   const feedbackMutation = useMutation({
     mutationFn: ({ messageId, rating }: { messageId: string; rating: number }) =>
       apiClient.chat.submitFeedback(messageId, rating),
@@ -87,6 +118,14 @@ export const ChatInterface = ({
       toast({
         title: "Feedback submitted",
         description: "Thank you for your feedback!",
+      });
+    },
+    onError: (error) => {
+      console.error("Feedback submission failed:", error);
+      toast({
+        title: "Error",
+        description: "Failed to submit feedback. Please try again.",
+        variant: "destructive",
       });
     },
   });
@@ -146,7 +185,11 @@ export const ChatInterface = ({
 
       {/* Messages */}
       <ScrollArea className="flex-1 p-4">
-        {messages.length === 0 && !isTyping ? (
+        {isLoadingMessages ? (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+          </div>
+        ) : messages.length === 0 && !isTyping ? (
           <Card className="p-8 text-center border-border/50 bg-gradient-secondary">
             <h3 className="text-lg font-semibold mb-2">Start a conversation</h3>
             <p className="text-sm text-muted-foreground">

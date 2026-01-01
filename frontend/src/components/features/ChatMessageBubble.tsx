@@ -18,19 +18,24 @@ export const ChatMessageBubble = ({
   cloneName = "AI",
   onFeedback,
 }: ChatMessageBubbleProps) => {
-  const [feedbackGiven, setFeedbackGiven] = useState(
-    message.feedbackRating !== undefined && message.feedbackRating !== null
-  );
+  // FIX: Derive feedbackGiven from message prop instead of local state
+  // This ensures it stays in sync when message updates
+  const feedbackGiven = message.feedbackRating !== undefined && message.feedbackRating !== null;
   const [showSources, setShowSources] = useState(false);
+  const [localFeedbackGiven, setLocalFeedbackGiven] = useState(false);
 
   const handleFeedback = (rating: number) => {
     if (onFeedback) {
       onFeedback(rating);
-      setFeedbackGiven(true);
+      setLocalFeedbackGiven(true); // Optimistic UI update
     }
   };
 
+  // FIX: Safe optional chaining instead of non-null assertions
   const hasSources = !isUser && message.ragContext && message.ragContext.chunks.length > 0;
+
+  // Show feedback buttons only if not given feedback (check both prop and local state)
+  const showFeedbackButtons = !isUser && onFeedback && !feedbackGiven && !localFeedbackGiven;
 
   return (
     <div className={`flex gap-3 ${isUser ? "flex-row-reverse" : "flex-row"} mb-4`}>
@@ -56,8 +61,8 @@ export const ChatMessageBubble = ({
           </p>
         </Card>
 
-        {/* RAG Sources (Clone messages only) */}
-        {hasSources && (
+        {/* RAG Sources (Clone messages only) - FIX: Safe optional chaining */}
+        {hasSources && message.ragContext && (
           <div className="mt-2 w-full">
             <Button
               variant="ghost"
@@ -73,7 +78,7 @@ export const ChatMessageBubble = ({
               ) : (
                 <>
                   <ChevronDown className="w-3 h-3 mr-1" />
-                  Show sources ({message.ragContext!.chunks.length})
+                  Show sources ({message.ragContext.chunks.length})
                 </>
               )}
             </Button>
@@ -84,7 +89,7 @@ export const ChatMessageBubble = ({
                   Sources used:
                 </p>
                 <div className="space-y-2">
-                  {message.ragContext!.chunks.map((chunk, idx) => (
+                  {message.ragContext.chunks.map((chunk, idx) => (
                     <div key={idx} className="text-xs">
                       <p className="text-muted-foreground line-clamp-2">
                         "{chunk.content}"
@@ -117,7 +122,7 @@ export const ChatMessageBubble = ({
           )}
 
           {/* Feedback buttons (Clone messages only) */}
-          {!isUser && onFeedback && !feedbackGiven && (
+          {showFeedbackButtons && (
             <div className="flex gap-1 ml-2">
               <Button
                 variant="ghost"
