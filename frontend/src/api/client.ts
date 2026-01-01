@@ -273,80 +273,34 @@ export const apiClient = {
     status: (id: string) => apiClient.get<{ status: string; transcription?: string }>(`/api/clone/transcribe/${id}`),
   },
 
-  // Chat endpoints (PLACEHOLDER - will be implemented in PR #3: Backend)
+  // Chat endpoints
   chat: {
     // Create or resume session for clone owner
     createSession: async (cloneId: string): Promise<ChatSession> => {
-      // TODO: Replace with real API call in PR #3
-      console.log("📝 PLACEHOLDER: createSession called for cloneId:", cloneId);
-      return {
-        id: 1,
-        cloneId,
-        startedAt: new Date().toISOString(),
-        lastMessageAt: new Date().toISOString(),
-        messageCount: 0,
-        status: 'active',
-      };
+      return apiClient.post<ChatSession>("/api/clone/chat/session");
+    },
+
+    // Create a new conversation (closes existing active sessions)
+    createNewSession: async (): Promise<ChatSession> => {
+      return apiClient.post<ChatSession>("/api/clone/chat/session/new");
     },
 
     // Send message and get clone response
     sendMessage: async (sessionId: number, data: SendMessageRequest): Promise<SendMessageResponse> => {
-      // TODO: Replace with real API call in PR #3
-      console.log("📝 PLACEHOLDER: sendMessage called with:", { sessionId, data });
-
-      // Simulate network delay
-      await new Promise(resolve => setTimeout(resolve, 2000));
-
-      const userMessage: ChatMessage = {
-        id: `msg-user-${Date.now()}`,
-        sessionId,
-        role: 'external_user',
-        content: data.content,
-        createdAt: new Date().toISOString(),
-        externalUserName: data.externalUserName,
-      };
-
-      const cloneMessage: ChatMessage = {
-        id: `msg-clone-${Date.now()}`,
-        sessionId,
-        role: 'clone',
-        content: `This is a placeholder response to: "${data.content}". The real response will use RAG + LLM when backend is implemented in PR #3.`,
-        createdAt: new Date(Date.now() + 100).toISOString(),
-        ragContext: {
-          chunks: [
-            {
-              content: "Placeholder RAG context chunk 1",
-              score: 0.95,
-              metadata: { source: "placeholder-doc.pdf" }
-            },
-            {
-              content: "Placeholder RAG context chunk 2",
-              score: 0.87,
-              metadata: { source: "placeholder-insight.txt" }
-            }
-          ]
-        },
-        tokensUsed: 150,
-        responseTimeMs: 1500,
-      };
-
-      return {
-        userMessage,
-        cloneMessage,
-      };
+      return apiClient.post<SendMessageResponse>(
+        `/api/clone/chat/session/${sessionId}/message`,
+        data
+      );
     },
 
     // Get all messages in a session
     getMessages: async (sessionId: number): Promise<ChatMessage[]> => {
-      // TODO: Replace with real API call in PR #3
-      console.log("📝 PLACEHOLDER: getMessages called for sessionId:", sessionId);
-      return [];
+      return apiClient.get<ChatMessage[]>(`/api/clone/chat/session/${sessionId}/messages`);
     },
 
     // Submit feedback on a clone message
     submitFeedback: async (messageId: string, rating: number): Promise<void> => {
-      // TODO: Replace with real API call in PR #3
-      console.log("📝 PLACEHOLDER: submitFeedback called with:", { messageId, rating });
+      return apiClient.post<void>(`/api/clone/chat/message/${messageId}/feedback`, { rating });
     },
   },
 };

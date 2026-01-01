@@ -124,15 +124,25 @@ export const ChatInterface = ({
     feedbackMutation.mutate({ messageId, rating });
   };
 
-  const handleNewConversation = () => {
-    // Clear messages and create new session
-    setMessages([]);
-    setSessionId(undefined);
-    queryClient.invalidateQueries({ queryKey: ["chatSession", cloneId] });
-    toast({
-      title: "New conversation started",
-      description: "Your previous conversation has been saved.",
-    });
+  const handleNewConversation = async () => {
+    try {
+      // Create new session (closes existing active sessions on backend)
+      const newSession = await apiClient.chat.createNewSession();
+      setMessages([]);
+      setSessionId(newSession.id);
+      queryClient.setQueryData(["chatSession", cloneId], newSession);
+      toast({
+        title: "New conversation started",
+        description: "Your previous conversation has been saved.",
+      });
+    } catch (error) {
+      console.error("Error creating new conversation:", error);
+      toast({
+        title: "Error",
+        description: "Failed to start new conversation. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   if (sessionLoading) {
