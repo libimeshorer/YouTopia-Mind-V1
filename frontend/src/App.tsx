@@ -56,6 +56,10 @@ const AppContent = () => (
               </ProtectedRoute>
             }
           />
+          {/* TODO: Consider updating route to use clone slug instead of UUID for better UX
+              Current: /chat/abc-123-def-456
+              Future:  /chat/tiffany-ai (requires clone.slug column + lookup)
+          */}
           <Route
             path="/chat/:cloneId"
             element={

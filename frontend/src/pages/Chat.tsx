@@ -1,3 +1,23 @@
+/**
+ * Chat Page
+ *
+ * Full-page chat interface for clone owners to interact with their AI clone.
+ * Displays the ChatInterface component with authentication and authorization checks.
+ *
+ * Route: /chat/:cloneId
+ *
+ * Features:
+ * - Protected route (requires Clerk authentication)
+ * - Clone owner verification (future: support customer access)
+ * - Loading states for auth and data fetching
+ * - Error states (not authenticated, missing cloneId)
+ * - Full-height chat interface
+ *
+ * @example
+ * // Access via route
+ * navigate(ROUTES.CHAT('abc-123-def-456'))
+ */
+
 import { useParams } from "react-router-dom";
 import { useUser } from "@clerk/clerk-react";
 import { ChatInterface } from "@/components/features/ChatInterface";
