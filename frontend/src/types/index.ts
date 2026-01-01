@@ -106,3 +106,42 @@ export interface TrainingStatus {
   achievements: string[];
 }
 
+// Chat types
+export interface ChatSession {
+  id: number;
+  cloneId: string;
+  startedAt: string;
+  lastMessageAt: string;
+  messageCount: number;
+  status: 'active' | 'closed';
+}
+
+export interface ChatMessage {
+  id: string;
+  sessionId: number;
+  role: 'external_user' | 'clone';
+  content: string;
+  createdAt: string;
+  externalUserName?: string;
+  ragContext?: {
+    chunks: Array<{
+      content: string;
+      score: number;
+      metadata?: Record<string, unknown>;
+    }>;
+  };
+  tokensUsed?: number;
+  responseTimeMs?: number;
+  feedbackRating?: number; // -1 (thumbs down), 1 (thumbs up), or null
+}
+
+export interface SendMessageRequest {
+  content: string;
+  externalUserName?: string;
+}
+
+export interface SendMessageResponse {
+  userMessage: ChatMessage;
+  cloneMessage: ChatMessage;
+}
+
