@@ -13,6 +13,7 @@ import SignUp from "./pages/SignUp";
 import Dashboard from "./pages/Dashboard";
 import Training from "./pages/Training";
 import Activity from "./pages/Activity";
+import Chat from "./pages/Chat";
 import NotFound from "./pages/NotFound";
 import ProtectedRoute from "./components/layout/ProtectedRoute";
 
@@ -52,6 +53,18 @@ const AppContent = () => (
             element={
               <ProtectedRoute>
                 <Activity />
+              </ProtectedRoute>
+            }
+          />
+          {/* TODO: Consider updating route to use clone slug instead of UUID for better UX
+              Current: /chat/abc-123-def-456
+              Future:  /chat/tiffany-ai (requires clone.slug column + lookup)
+          */}
+          <Route
+            path="/chat/:cloneId"
+            element={
+              <ProtectedRoute>
+                <Chat />
               </ProtectedRoute>
             }
           />
