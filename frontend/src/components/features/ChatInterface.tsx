@@ -41,28 +41,74 @@ export const ChatInterface = ({
   const [sessionId, setSessionId] = useState<number | undefined>(undefined);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isTyping, setIsTyping] = useState(false);
+  const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
   // Create or resume session
-  const { data: session, isLoading: sessionLoading } = useQuery<ChatSession>({
+  const { data: session, isLoading: sessionLoading, error: sessionError, isError: sessionHasError } = useQuery<ChatSession>({
     queryKey: ["chatSession", cloneId],
     queryFn: async () => {
+      console.log("🔵 Creating/resuming session for cloneId:", cloneId);
       const newSession = await apiClient.chat.createSession(cloneId);
-      setSessionId(newSession.id);
+      console.log("✅ Session created/resumed:", newSession);
       return newSession;
+    },
+    retry: 2, // Retry failed requests twice
+    onError: (error) => {
+      console.error("❌ Session creation failed:", error);
+      toast({
+        title: "Failed to create chat session",
+        description: error instanceof Error ? error.message : "Could not connect to chat service. Please refresh the page.",
+        variant: "destructive",
+      });
     },
   });
 
-  // Load messages when session is ready
+  // FIX BUG #1: Extract sessionId from query result (no side effects in queryFn)
   useEffect(() => {
-    if (sessionId) {
-      apiClient.chat.getMessages(sessionId).then((loadedMessages) => {
-        setMessages(loadedMessages);
-      });
+    console.log("🔍 Session data changed:", session);
+    if (session?.id) {
+      console.log("✅ Setting sessionId:", session.id);
+      setSessionId(session.id);
+    } else if (session) {
+      console.error("⚠️ Session exists but has no id:", session);
     }
-  }, [sessionId]);
+  }, [session]);
+
+  // FIX BUG #3, #4, #5: Load messages with error handling, loading state, and cleanup
+  useEffect(() => {
+    if (!sessionId) return;
+
+    let isMounted = true; // Cleanup flag
+    setIsLoadingMessages(true);
+
+    apiClient.chat
+      .getMessages(sessionId)
+      .then((loadedMessages) => {
+        if (isMounted) {
+          setMessages(loadedMessages);
+          setIsLoadingMessages(false);
+        }
+      })
+      .catch((error) => {
+        if (isMounted) {
+          console.error("Failed to load messages:", error);
+          setIsLoadingMessages(false);
+          toast({
+            title: "Error loading messages",
+            description: "Could not load conversation history.",
+            variant: "destructive",
+          });
+        }
+      });
+
+    // Cleanup: prevent state updates after unmount
+    return () => {
+      isMounted = false;
+    };
+  }, [sessionId, toast]);
 
   // Send message mutation
   const sendMessageMutation = useMutation({
@@ -107,6 +153,14 @@ export const ChatInterface = ({
         description: "Thank you for your feedback!",
       });
     },
+    onError: (error) => {
+      console.error("Feedback submission failed:", error);
+      toast({
+        title: "Error",
+        description: "Failed to submit feedback. Please try again.",
+        variant: "destructive",
+      });
+    },
   });
 
   // Auto-scroll to bottom when messages change
@@ -124,21 +178,59 @@ export const ChatInterface = ({
     feedbackMutation.mutate({ messageId, rating });
   };
 
-  const handleNewConversation = () => {
-    // Clear messages and create new session
-    setMessages([]);
-    setSessionId(undefined);
-    queryClient.invalidateQueries({ queryKey: ["chatSession", cloneId] });
-    toast({
-      title: "New conversation started",
-      description: "Your previous conversation has been saved.",
-    });
+  const handleNewConversation = async () => {
+    try {
+      // Create new session (closes existing active sessions on backend)
+      const newSession = await apiClient.chat.createNewSession();
+      setMessages([]);
+      setSessionId(newSession.id);
+      queryClient.setQueryData(["chatSession", cloneId], newSession);
+      toast({
+        title: "New conversation started",
+        description: "Your previous conversation has been saved.",
+      });
+    } catch (error) {
+      console.error("Error creating new conversation:", error);
+      toast({
+        title: "Error",
+        description: "Failed to start new conversation. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
+
+  // Debug logging for disabled state
+  useEffect(() => {
+    console.log("💬 Chat input state:", {
+      sessionId,
+      isPending: sendMessageMutation.isPending,
+      isTyping,
+      disabled: sendMessageMutation.isPending || isTyping || !sessionId,
+    });
+  }, [sessionId, sendMessageMutation.isPending, isTyping]);
 
   if (sessionLoading) {
     return (
       <div className="flex items-center justify-center h-full">
         <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+        <p className="ml-2 text-sm text-muted-foreground">Loading chat session...</p>
+      </div>
+    );
+  }
+
+  // Show error state if session creation failed
+  if (sessionHasError) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <Card className="p-8 max-w-md text-center border-destructive">
+          <h3 className="text-lg font-semibold mb-2 text-destructive">Failed to Connect</h3>
+          <p className="text-sm text-muted-foreground mb-4">
+            {sessionError instanceof Error ? sessionError.message : "Could not establish chat session. Please try refreshing the page."}
+          </p>
+          <Button onClick={() => queryClient.invalidateQueries({ queryKey: ["chatSession", cloneId] })}>
+            Retry
+          </Button>
+        </Card>
       </div>
     );
   }
@@ -164,7 +256,11 @@ export const ChatInterface = ({
 
       {/* Messages */}
       <ScrollArea className="flex-1 p-4">
-        {messages.length === 0 && !isTyping ? (
+        {isLoadingMessages ? (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+          </div>
+        ) : messages.length === 0 && !isTyping ? (
           <Card className="p-8 text-center border-border/50 bg-gradient-secondary">
             <h3 className="text-lg font-semibold mb-2">Start a conversation</h3>
             <p className="text-sm text-muted-foreground">
