@@ -1,6 +1,7 @@
 """Chat service for managing conversations between clone owners and their AI clones"""
 
 import time
+from datetime import datetime
 from typing import List, Dict, Optional, Tuple
 from uuid import UUID
 from sqlalchemy.orm import Session
@@ -10,7 +11,6 @@ from src.database.models import Session as ChatSession, Message, Clone
 from src.rag.retriever import RAGRetriever
 from src.rag.clone_vector_store import CloneVectorStore
 from src.llm.client import LLMClient
-from src.llm.prompt_builder import PromptBuilder
 from src.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -243,8 +243,11 @@ class ChatService:
         self.db.add(clone_msg)
 
         # Update session stats
+        # FIX BUG #6: Use current time explicitly instead of clone_msg.created_at
+        # (created_at is set by database and won't have a value until after commit)
+        current_time = datetime.utcnow()
         session.message_count = session.message_count + 2  # User message + clone message
-        session.last_message_at = clone_msg.created_at
+        session.last_message_at = current_time
 
         # Commit all changes
         self.db.commit()
