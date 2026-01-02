@@ -45,36 +45,49 @@ export const apiClient = {
     options: RequestInit = {}
   ): Promise<T> {
     const url = `${API_BASE_URL}${endpoint}`;
-    
+
+    console.log(`🌐 API Request: ${options.method || 'GET'} ${endpoint}`);
+
     // Get authentication token
     const token = await getAuthToken();
-    
+
+    if (!token) {
+      console.warn("⚠️ No authentication token available");
+    } else {
+      console.log("✅ Auth token present");
+    }
+
     // Build headers
     const headers: HeadersInit = {
       ...options.headers,
     };
-    
+
     // Add Content-Type for non-FormData requests
     if (!(options.body instanceof FormData)) {
       headers["Content-Type"] = "application/json";
     }
-    
+
     // Add Authorization header if token is available
     if (token) {
       headers["Authorization"] = `Bearer ${token}`;
     }
-    
+
     const response = await fetch(url, {
       ...options,
       headers,
     });
 
+    console.log(`📡 API Response: ${response.status} ${response.statusText}`);
+
     if (!response.ok) {
       const errorText = await response.text().catch(() => response.statusText);
+      console.error(`❌ API Error: ${response.status} - ${errorText}`);
       throw new Error(`API Error (${response.status}): ${errorText || response.statusText}`);
     }
 
-    return response.json();
+    const data = await response.json();
+    console.log(`📦 API Response data:`, data);
+    return data;
   },
 
   get<T>(endpoint: string): Promise<T> {

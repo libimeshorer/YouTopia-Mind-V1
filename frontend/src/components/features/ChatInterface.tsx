@@ -47,18 +47,33 @@ export const ChatInterface = ({
   const { toast } = useToast();
 
   // Create or resume session
-  const { data: session, isLoading: sessionLoading } = useQuery<ChatSession>({
+  const { data: session, isLoading: sessionLoading, error: sessionError, isError: sessionHasError } = useQuery<ChatSession>({
     queryKey: ["chatSession", cloneId],
     queryFn: async () => {
+      console.log("🔵 Creating/resuming session for cloneId:", cloneId);
       const newSession = await apiClient.chat.createSession(cloneId);
+      console.log("✅ Session created/resumed:", newSession);
       return newSession;
+    },
+    retry: 2, // Retry failed requests twice
+    onError: (error) => {
+      console.error("❌ Session creation failed:", error);
+      toast({
+        title: "Failed to create chat session",
+        description: error instanceof Error ? error.message : "Could not connect to chat service. Please refresh the page.",
+        variant: "destructive",
+      });
     },
   });
 
   // FIX BUG #1: Extract sessionId from query result (no side effects in queryFn)
   useEffect(() => {
+    console.log("🔍 Session data changed:", session);
     if (session?.id) {
+      console.log("✅ Setting sessionId:", session.id);
       setSessionId(session.id);
+    } else if (session) {
+      console.error("⚠️ Session exists but has no id:", session);
     }
   }, [session]);
 
@@ -184,10 +199,38 @@ export const ChatInterface = ({
     }
   };
 
+  // Debug logging for disabled state
+  useEffect(() => {
+    console.log("💬 Chat input state:", {
+      sessionId,
+      isPending: sendMessageMutation.isPending,
+      isTyping,
+      disabled: sendMessageMutation.isPending || isTyping || !sessionId,
+    });
+  }, [sessionId, sendMessageMutation.isPending, isTyping]);
+
   if (sessionLoading) {
     return (
       <div className="flex items-center justify-center h-full">
         <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+        <p className="ml-2 text-sm text-muted-foreground">Loading chat session...</p>
+      </div>
+    );
+  }
+
+  // Show error state if session creation failed
+  if (sessionHasError) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <Card className="p-8 max-w-md text-center border-destructive">
+          <h3 className="text-lg font-semibold mb-2 text-destructive">Failed to Connect</h3>
+          <p className="text-sm text-muted-foreground mb-4">
+            {sessionError instanceof Error ? sessionError.message : "Could not establish chat session. Please try refreshing the page."}
+          </p>
+          <Button onClick={() => queryClient.invalidateQueries({ queryKey: ["chatSession", cloneId] })}>
+            Retry
+          </Button>
+        </Card>
       </div>
     );
   }
