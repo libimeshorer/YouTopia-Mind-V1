@@ -116,15 +116,36 @@ export const ChatInterface = ({
       if (!sessionId) throw new Error("No session available");
       return apiClient.chat.sendMessage(sessionId, { content });
     },
-    onMutate: () => {
+    onMutate: (content: string) => {
+      // Optimistic update: Show user message immediately
+      const optimisticUserMessage: ChatMessage = {
+        id: `temp-user-${Date.now()}`,
+        sessionId: sessionId!,
+        role: 'external_user',
+        content: content,
+        createdAt: new Date().toISOString(),
+        externalUserName: 'You',
+      };
+
+      setMessages((prev) => [...prev, optimisticUserMessage]);
       setIsTyping(true);
     },
     onSuccess: (data) => {
-      // Add both messages to state
-      setMessages((prev) => [...prev, data.userMessage, data.cloneMessage]);
+      // Update optimistic message with server data but keep client timestamp
+      setMessages((prev) => {
+        const updated = prev.map(msg =>
+          msg.id.startsWith('temp-user-')
+            ? { ...data.userMessage, createdAt: msg.createdAt }
+            : msg
+        );
+        // Add the clone response
+        return [...updated, data.cloneMessage];
+      });
       setIsTyping(false);
     },
     onError: (error) => {
+      // Remove optimistic message on error
+      setMessages((prev) => prev.filter(msg => !msg.id.startsWith('temp-user-')));
       setIsTyping(false);
       toast({
         title: "Error",
@@ -241,7 +262,7 @@ export const ChatInterface = ({
       <div className="flex items-center justify-between p-4 border-b border-border/50">
         <div>
           <h2 className="text-xl font-semibold">{cloneName}</h2>
-          <p className="text-sm text-muted-foreground">AI Assistant</p>
+          <p className="text-sm text-muted-foreground">AI Clone</p>
         </div>
         <Button
           variant="outline"
@@ -261,12 +282,14 @@ export const ChatInterface = ({
             <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
           </div>
         ) : messages.length === 0 && !isTyping ? (
-          <Card className="p-8 text-center border-border/50 bg-gradient-secondary">
-            <h3 className="text-lg font-semibold mb-2">Start a conversation</h3>
-            <p className="text-sm text-muted-foreground">
-              Ask me anything! I'm here to help based on your knowledge and experience.
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <h3 className="text-2xl font-semibold mb-3 bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent">
+              Start a conversation
+            </h3>
+            <p className="text-muted-foreground max-w-md">
+              How can I help? Happy to reply based on my experience and knowledge.
             </p>
-          </Card>
+          </div>
         ) : (
           <>
             {messages.map((message) => (

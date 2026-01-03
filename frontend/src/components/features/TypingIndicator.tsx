@@ -15,14 +15,14 @@
 
 import { Card } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Bot } from "lucide-react";
+import { User } from "lucide-react";
 
 export const TypingIndicator = () => {
   return (
     <div className="flex gap-3 mb-4">
       <Avatar className="w-8 h-8">
         <AvatarFallback className="bg-secondary/20">
-          <Bot className="w-4 h-4" />
+          <User className="w-4 h-4" />
         </AvatarFallback>
       </Avatar>
 
