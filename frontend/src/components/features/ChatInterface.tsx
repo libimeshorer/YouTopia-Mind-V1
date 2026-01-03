@@ -131,12 +131,15 @@ export const ChatInterface = ({
       setIsTyping(true);
     },
     onSuccess: (data) => {
-      // Replace optimistic message with real messages from server
+      // Update optimistic message with server data but keep client timestamp
       setMessages((prev) => {
-        // Remove the temporary optimistic message
-        const withoutOptimistic = prev.filter(msg => !msg.id.startsWith('temp-user-'));
-        // Add the real user message and clone response
-        return [...withoutOptimistic, data.userMessage, data.cloneMessage];
+        const updated = prev.map(msg =>
+          msg.id.startsWith('temp-user-')
+            ? { ...data.userMessage, createdAt: msg.createdAt }
+            : msg
+        );
+        // Add the clone response
+        return [...updated, data.cloneMessage];
       });
       setIsTyping(false);
     },

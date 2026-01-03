@@ -85,6 +85,12 @@ export const apiClient = {
       throw new Error(`API Error (${response.status}): ${errorText || response.statusText}`);
     }
 
+    // Handle 204 No Content (no response body)
+    if (response.status === 204) {
+      console.log(`📦 API Response: No content (204)`);
+      return undefined as T;
+    }
+
     const data = await response.json();
     console.log(`📦 API Response data:`, data);
     return data;
