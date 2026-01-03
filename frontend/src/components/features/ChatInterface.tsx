@@ -279,12 +279,14 @@ export const ChatInterface = ({
             <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
           </div>
         ) : messages.length === 0 && !isTyping ? (
-          <Card className="p-8 text-center border-border/50 bg-gradient-secondary">
-            <h3 className="text-lg font-semibold mb-2">Start a conversation</h3>
-            <p className="text-sm text-muted-foreground">
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <h3 className="text-2xl font-semibold mb-3 bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent">
+              Start a conversation
+            </h3>
+            <p className="text-muted-foreground max-w-md">
               Ask me anything! I'm here to help based on your knowledge and experience.
             </p>
-          </Card>
+          </div>
         ) : (
           <>
             {messages.map((message) => (
