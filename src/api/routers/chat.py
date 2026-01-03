@@ -95,7 +95,7 @@ async def create_or_resume_session(
     Returns existing active session or creates a new one.
     """
     try:
-        chat_service = ChatService(clone_id=clone_ctx.clone_id, db=db)
+        chat_service = ChatService(clone_id=clone_ctx.clone_id, tenant_id=clone_ctx.tenant_id, db=db)
         session = chat_service.get_or_create_owner_session()
 
         return ChatSessionResponse(
@@ -124,7 +124,7 @@ async def create_new_session(
     Used when owner clicks "New Conversation" button.
     """
     try:
-        chat_service = ChatService(clone_id=clone_ctx.clone_id, db=db)
+        chat_service = ChatService(clone_id=clone_ctx.clone_id, tenant_id=clone_ctx.tenant_id, db=db)
         session = chat_service.create_new_session(close_existing=True)
 
         return ChatSessionResponse(
@@ -151,7 +151,7 @@ async def get_session_messages(
 ):
     """Get all messages for a chat session"""
     try:
-        chat_service = ChatService(clone_id=clone_ctx.clone_id, db=db)
+        chat_service = ChatService(clone_id=clone_ctx.clone_id, tenant_id=clone_ctx.tenant_id, db=db)
         messages = chat_service.get_session_messages(session_id)
 
         return [message_to_response(msg) for msg in messages]
@@ -181,7 +181,7 @@ async def send_message(
     Uses RAG to retrieve context and LLM to generate response.
     """
     try:
-        chat_service = ChatService(clone_id=clone_ctx.clone_id, db=db)
+        chat_service = ChatService(clone_id=clone_ctx.clone_id, tenant_id=clone_ctx.tenant_id, db=db)
         user_msg, clone_msg = chat_service.send_message_and_get_response(
             session_id=session_id,
             user_message=request.content,
@@ -223,7 +223,7 @@ async def submit_message_feedback(
         )
 
     try:
-        chat_service = ChatService(clone_id=clone_ctx.clone_id, db=db)
+        chat_service = ChatService(clone_id=clone_ctx.clone_id, tenant_id=clone_ctx.tenant_id, db=db)
         chat_service.submit_feedback(
             message_id=message_uuid,
             rating=request.rating,
