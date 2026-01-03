@@ -85,8 +85,8 @@ const Chat = () => {
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <Header />
-      <div className="flex-1 container mx-auto px-6 py-8">
-        <Card className="h-[calc(100vh-200px)]">
+      <div className="flex-1 container mx-auto px-6 py-16 flex items-center">
+        <Card className="h-[calc(100vh-250px)] w-full max-w-5xl mx-auto">
           <ChatInterface cloneId={cloneId} cloneName={cloneName} />
         </Card>
       </div>

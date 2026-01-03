@@ -116,15 +116,33 @@ export const ChatInterface = ({
       if (!sessionId) throw new Error("No session available");
       return apiClient.chat.sendMessage(sessionId, { content });
     },
-    onMutate: () => {
+    onMutate: (content: string) => {
+      // Optimistic update: Show user message immediately
+      const optimisticUserMessage: ChatMessage = {
+        id: `temp-user-${Date.now()}`,
+        sessionId: sessionId!,
+        role: 'external_user',
+        content: content,
+        createdAt: new Date().toISOString(),
+        externalUserName: 'You',
+      };
+
+      setMessages((prev) => [...prev, optimisticUserMessage]);
       setIsTyping(true);
     },
     onSuccess: (data) => {
-      // Add both messages to state
-      setMessages((prev) => [...prev, data.userMessage, data.cloneMessage]);
+      // Replace optimistic message with real messages from server
+      setMessages((prev) => {
+        // Remove the temporary optimistic message
+        const withoutOptimistic = prev.filter(msg => !msg.id.startsWith('temp-user-'));
+        // Add the real user message and clone response
+        return [...withoutOptimistic, data.userMessage, data.cloneMessage];
+      });
       setIsTyping(false);
     },
     onError: (error) => {
+      // Remove optimistic message on error
+      setMessages((prev) => prev.filter(msg => !msg.id.startsWith('temp-user-')));
       setIsTyping(false);
       toast({
         title: "Error",
@@ -241,7 +259,7 @@ export const ChatInterface = ({
       <div className="flex items-center justify-between p-4 border-b border-border/50">
         <div>
           <h2 className="text-xl font-semibold">{cloneName}</h2>
-          <p className="text-sm text-muted-foreground">AI Assistant</p>
+          <p className="text-sm text-muted-foreground">AI Clone</p>
         </div>
         <Button
           variant="outline"
