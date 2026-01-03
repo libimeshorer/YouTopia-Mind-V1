@@ -24,7 +24,7 @@
 import { ChatMessage } from "@/types";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ThumbsUp, ThumbsDown, User, UserCircle, ChevronDown, ChevronUp } from "lucide-react";
+import { ThumbsUp, ThumbsDown, User, ChevronDown, ChevronUp } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useState } from "react";
 
@@ -60,7 +60,7 @@ export const ChatMessageBubble = ({
       {/* Avatar */}
       <Avatar className="w-8 h-8">
         <AvatarFallback className={isUser ? "bg-primary/20" : "bg-secondary/20"}>
-          {isUser ? <User className="w-4 h-4" /> : <UserCircle className="w-4 h-4" />}
+          <User className="w-4 h-4" />
         </AvatarFallback>
       </Avatar>
 

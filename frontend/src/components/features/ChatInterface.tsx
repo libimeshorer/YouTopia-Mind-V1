@@ -284,7 +284,7 @@ export const ChatInterface = ({
               Start a conversation
             </h3>
             <p className="text-muted-foreground max-w-md">
-              Ask me anything! I'm here to help based on your knowledge and experience.
+              How can I help? Happy to reply based on my experience and knowledge.
             </p>
           </div>
         ) : (
