@@ -22,18 +22,23 @@ class ChatService:
     def __init__(
         self,
         clone_id: UUID,
+        tenant_id: UUID,
         db: Session,
         rag_retriever: Optional[RAGRetriever] = None,
         llm_client: Optional[LLMClient] = None,
     ):
         self.clone_id = clone_id
+        self.tenant_id = tenant_id
         self.db = db
 
         # Initialize RAG retriever with clone-specific vector store
         if rag_retriever:
             self.rag_retriever = rag_retriever
         else:
-            clone_vector_store = CloneVectorStore(clone_id=str(clone_id))
+            clone_vector_store = CloneVectorStore(
+                clone_id=clone_id,
+                tenant_id=tenant_id,
+            )
             self.rag_retriever = RAGRetriever(
                 clone_vector_store=clone_vector_store,
                 top_k=5,
