@@ -91,9 +91,32 @@ export const apiClient = {
       return undefined as T;
     }
 
-    const data = await response.json();
-    console.log(`📦 API Response data:`, data);
-    return data;
+    // Check if response has content before trying to parse JSON
+    const contentType = response.headers.get("content-type");
+    const contentLength = response.headers.get("content-length");
+
+    // If no content or content-length is 0, return undefined
+    if (contentLength === "0" || (!contentType && !contentLength)) {
+      console.log(`📦 API Response: Empty body (likely successful DELETE)`);
+      return undefined as T;
+    }
+
+    // Try to parse JSON, but handle empty responses gracefully
+    try {
+      const text = await response.text();
+      if (!text || text.trim() === "") {
+        console.log(`📦 API Response: Empty body`);
+        return undefined as T;
+      }
+      const data = JSON.parse(text);
+      console.log(`📦 API Response data:`, data);
+      return data;
+    } catch (error) {
+      // If JSON parsing fails but the response was successful, return undefined
+      // This handles cases where the backend returns empty body with 200 status
+      console.warn(`⚠️ Failed to parse JSON response, but request was successful`);
+      return undefined as T;
+    }
   },
 
   get<T>(endpoint: string): Promise<T> {
