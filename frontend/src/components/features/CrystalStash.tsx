@@ -57,7 +57,7 @@ export const CrystalStash = ({
       <CardContent className="p-6">
         <div className="text-center space-y-4">
           {/* Header */}
-          <h3 className="font-semibold text-lg">Clone Training Progress</h3>
+          <h3 className="font-semibold text-2xl">Clone Training Progress</h3>
 
           {/* Crystal Image */}
           <div className="relative flex items-center justify-center min-h-[160px]">
@@ -79,7 +79,7 @@ export const CrystalStash = ({
 
           {/* Crystal Count */}
           <div className="space-y-1">
-            <p className="text-2xl font-bold text-primary">
+            <p className="text-lg font-bold text-primary">
               {totalItems} Knowledge Block{totalItems !== 1 ? "s" : ""}
             </p>
             <p className="text-xs text-muted-foreground">

@@ -1,5 +1,6 @@
 import { Card, CardContent } from "@/components/ui/card";
-import { FileText, Lightbulb, Link2, Clock } from "lucide-react";
+// import { FileText, Lightbulb, Link2 } from "lucide-react";
+import { Clock } from "lucide-react";
 import { CrystalStash } from "./CrystalStash";
 
 interface StatsCardsProps {
@@ -31,28 +32,28 @@ export const StatsCards = ({
     return date.toLocaleDateString();
   };
 
-  const stats = [
-    {
-      icon: FileText,
-      label: "Documents",
-      value: documentsCount,
-    },
-    {
-      icon: Lightbulb,
-      label: "Insights",
-      value: insightsCount,
-    },
-    {
-      icon: Link2,
-      label: "Integrations",
-      value: integrationsCount,
-    },
-  ];
+  // const stats = [
+  //   {
+  //     icon: FileText,
+  //     label: "Documents",
+  //     value: documentsCount,
+  //   },
+  //   {
+  //     icon: Lightbulb,
+  //     label: "Insights",
+  //     value: insightsCount,
+  //   },
+  //   {
+  //     icon: Link2,
+  //     label: "Integrations",
+  //     value: integrationsCount,
+  //   },
+  // ];
 
   return (
     <div className="space-y-6">
-      {/* Main Stats Grid */}
-      <div className="grid grid-cols-3 gap-4">
+      {/* Main Stats Grid - Commented out, may restore later */}
+      {/* <div className="grid grid-cols-3 gap-4">
         {stats.map((stat, index) => {
           const Icon = stat.icon;
           return (
@@ -76,7 +77,7 @@ export const StatsCards = ({
             </Card>
           );
         })}
-      </div>
+      </div> */}
 
       {/* Crystal Stash - replaces Progress Card */}
       <CrystalStash
