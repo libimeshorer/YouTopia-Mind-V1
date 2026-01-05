@@ -92,18 +92,18 @@ export interface Integration {
   icon?: string;
 }
 
-export interface TrainingStatus {
-  isComplete: boolean;
-  progress: number; // 0-100
+/**
+ * Training stats for crystal calculation
+ * Note: The old TrainingStatus with progress/thresholds/achievements has been removed.
+ * Crystal count is now calculated client-side based on these counts.
+ * @see useCrystals hook for crystal calculation logic
+ */
+export interface TrainingStats {
   documentsCount: number;
   insightsCount: number;
   integrationsCount: number;
-  thresholds: {
-    minDocuments: number;
-    minInsights: number;
-    minIntegrations: number;
-  };
-  achievements: string[];
+  dataPoints: number;
+  lastActivity?: string;
 }
 
 // Chat types

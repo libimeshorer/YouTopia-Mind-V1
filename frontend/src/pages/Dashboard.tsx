@@ -3,24 +3,20 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Plus, Bot, Loader2 } from "lucide-react";
-import { Link } from "react-router-dom";
 import { ROUTES } from "@/constants/routes";
 import Header from "@/components/layout/Header";
-import { useQuery } from "@tanstack/react-query";
-import { apiClient } from "@/api/client";
-import { TrainingStatus } from "@/types";
+import { useEffect } from "react";
 
 const Dashboard = () => {
   const { user, isLoaded: userLoaded } = useUser();
   const navigate = useNavigate();
 
-  const { data: trainingStatus, isLoading: statusLoading } = useQuery<TrainingStatus>({
-    queryKey: ["trainingStatus"],
-    queryFn: () => apiClient.training.status(),
-    retry: 1,
-    refetchOnWindowFocus: false,
-    staleTime: 30000,
-  });
+  // Redirect to training page by default when user is loaded
+  useEffect(() => {
+    if (userLoaded) {
+      navigate(ROUTES.TRAINING, { replace: true });
+    }
+  }, [userLoaded, navigate]);
 
   // Get user display name safely
   const getUserDisplayName = () => {
@@ -32,7 +28,7 @@ const Dashboard = () => {
     return "there";
   };
 
-  // Show loading only if user data is still loading
+  // Show loading while redirecting
   if (!userLoaded) {
     return (
       <div className="min-h-screen bg-background">
@@ -46,17 +42,7 @@ const Dashboard = () => {
     );
   }
 
-  // If we have training status, redirect appropriately
-  if (trainingStatus && !statusLoading) {
-    if (trainingStatus.isComplete) {
-      navigate(ROUTES.ACTIVITY, { replace: true });
-      return null;
-    } else {
-      navigate(ROUTES.TRAINING, { replace: true });
-      return null;
-    }
-  }
-
+  // This content will briefly show before redirect
   return (
     <div className="min-h-screen bg-background">
       <Header />
@@ -76,8 +62,8 @@ const Dashboard = () => {
           <div className="mb-8">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-2xl font-semibold">Your Clones</h2>
-              <Button 
-                size="lg" 
+              <Button
+                size="lg"
                 className="bg-gradient-primary hover:shadow-glow"
                 onClick={() => navigate(ROUTES.TRAINING)}
               >
@@ -95,10 +81,11 @@ const Dashboard = () => {
               </div>
               <h3 className="text-2xl font-semibold mb-3">No clones yet</h3>
               <p className="text-muted-foreground mb-6 max-w-md mx-auto">
-                Create your first digital twin to get started. Upload your data, connect your apps, and train your AI clone.
+                Create your first digital twin to get started. Upload your data,
+                connect your apps, and train your AI clone.
               </p>
-              <Button 
-                size="lg" 
+              <Button
+                size="lg"
                 className="bg-gradient-primary hover:shadow-glow"
                 onClick={() => navigate(ROUTES.TRAINING)}
               >
@@ -115,9 +102,9 @@ const Dashboard = () => {
               <p className="text-sm text-muted-foreground mb-4">
                 Add PDFs, Word docs, and text files to train your clone
               </p>
-              <Button 
-                variant="outline" 
-                size="sm" 
+              <Button
+                variant="outline"
+                size="sm"
                 className="w-full"
                 onClick={() => navigate(ROUTES.TRAINING)}
               >
@@ -130,9 +117,9 @@ const Dashboard = () => {
               <p className="text-sm text-muted-foreground mb-4">
                 Link Slack, email, and other services to your clone
               </p>
-              <Button 
-                variant="outline" 
-                size="sm" 
+              <Button
+                variant="outline"
+                size="sm"
                 className="w-full"
                 onClick={() => navigate(ROUTES.TRAINING)}
               >
@@ -157,7 +144,3 @@ const Dashboard = () => {
 };
 
 export default Dashboard;
-
-
-
-

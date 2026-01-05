@@ -1,36 +1,46 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "react-router-dom";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useUser } from "@clerk/clerk-react";
 import Header from "@/components/layout/Header";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { DocumentUpload } from "@/components/features/DocumentUpload";
 import { InsightsManager } from "@/components/features/InsightsManager";
 import { IntegrationCard } from "@/components/features/IntegrationCard";
 import { StatsCards } from "@/components/features/StatsCards";
 import { apiClient } from "@/api/client";
-import { TrainingStatus, Integration } from "@/types";
-import { ROUTES } from "@/constants/routes";
-import { useToast } from "@/hooks/use-toast";
+import { Integration } from "@/types";
 import { Bot, MessageSquare, Loader2 } from "lucide-react";
+
+// Type for training stats response
+interface TrainingStats {
+  documentsCount: number;
+  insightsCount: number;
+  integrationsCount: number;
+  dataPoints: number;
+  lastActivity?: string;
+}
 
 const Training = () => {
   const { user } = useUser();
-  const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { toast } = useToast();
 
-  const { data: trainingStatus, isLoading: statusLoading, isFetching: statusFetching, isError: statusError } = useQuery<TrainingStatus>({
-    queryKey: ["trainingStatus"],
-    queryFn: () => apiClient.training.status(),
-    staleTime: 30000, // Set a stale time to prevent constant refetching
-    retry: 1,
-    refetchOnWindowFocus: false,
-  });
-
-  const { data: stats } = useQuery({
+  // Only fetch stats - no longer need training status with progress/thresholds
+  const {
+    data: stats,
+    isLoading: statsLoading,
+    isError: statsError,
+  } = useQuery<TrainingStats>({
     queryKey: ["trainingStats"],
     queryFn: () => apiClient.training.stats(),
+    staleTime: 30000,
+    retry: 1,
+    refetchOnWindowFocus: false,
   });
 
   const { data: integrations = [] } = useQuery<Integration[]>({
@@ -38,42 +48,16 @@ const Training = () => {
     queryFn: () => apiClient.integrations.list(),
   });
 
-  const completeMutation = useMutation({
-    mutationFn: () => apiClient.training.complete(),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["trainingStatus"] });
-      setTimeout(() => {
-        navigate(ROUTES.ACTIVITY);
-      }, 2000);
-    },
-  });
-
-  const handleComplete = () => {
-    if (effectiveTrainingStatus && effectiveTrainingStatus.progress >= 100) {
-      completeMutation.mutate();
-    }
-  };
-
-  // Create a default training status if API fails
-  const defaultTrainingStatus: TrainingStatus = {
-    isComplete: false,
-    progress: 0,
+  // Default stats if API fails
+  const effectiveStats: TrainingStats = stats || {
     documentsCount: 0,
     insightsCount: 0,
     integrationsCount: 0,
-    thresholds: {
-      minDocuments: 20,
-      minInsights: 0,
-      minIntegrations: 3,
-    },
-    achievements: [],
+    dataPoints: 0,
   };
 
-  // Use default status if API fails or is loading
-  const effectiveTrainingStatus = trainingStatus || defaultTrainingStatus;
-
-  // Only show loading spinner on initial load, not during background refetches
-  if (statusLoading && !trainingStatus) {
+  // Only show loading spinner on initial load
+  if (statsLoading && !stats) {
     return (
       <div className="min-h-screen bg-background">
         <Header />
@@ -106,18 +90,23 @@ const Training = () => {
           {/* Welcome Section */}
           <div className="mb-8">
             <h1 className="text-4xl md:text-5xl font-bold mb-4">
-              Welcome, {user?.firstName || user?.emailAddresses?.[0]?.emailAddress?.split("@")[0] || "there"}!
+              Welcome,{" "}
+              {user?.firstName ||
+                user?.emailAddresses?.[0]?.emailAddress?.split("@")[0] ||
+                "there"}
+              !
             </h1>
             <p className="text-xl text-muted-foreground">
-              Let's train your clone! Complete the steps below to get started.
+              Let's train your clone! Add documents, insights, and integrations
+              to grow your knowledge crystals.
             </p>
-            {statusError && (
+            {statsError && (
               <div className="mt-4 p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
                 <p className="text-sm text-yellow-600 dark:text-yellow-400 font-medium mb-2">
-                  ⚠️ Unable to connect to the backend
+                  Unable to connect to the backend
                 </p>
                 <p className="text-xs text-yellow-600/80 dark:text-yellow-400/80">
-                  {import.meta.env.VITE_API_URL 
+                  {import.meta.env.VITE_API_URL
                     ? `Backend URL is configured as: ${import.meta.env.VITE_API_URL}. Please verify it's correct and the backend is running.`
                     : `VITE_API_URL environment variable is not set. Set it to your backend URL (e.g., https://api.you-topia.ai) in your deployment platform (Vercel → Settings → Environment Variables).`}
                 </p>
@@ -133,27 +122,30 @@ const Training = () => {
             {/* Left Column - Training Sections */}
             <div className="lg:col-span-2 space-y-8">
               {/* Section 1.1: Upload Documents */}
-              <Card data-training-section data-complete={effectiveTrainingStatus.documentsCount >= effectiveTrainingStatus.thresholds.minDocuments ? "true" : "false"}>
+              <Card data-training-section>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <Bot className="w-5 h-5" />
                     1. Upload Documents
                   </CardTitle>
                   <CardDescription>
-                    Upload PDFs, Word documents, and text files to train your clone
+                    Upload PDFs, Word documents, and text files to train your
+                    clone
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
                   <DocumentUpload
                     onUploadComplete={() => {
-                      queryClient.invalidateQueries({ queryKey: ["trainingStatus"] });
+                      queryClient.invalidateQueries({
+                        queryKey: ["trainingStats"],
+                      });
                     }}
                   />
                 </CardContent>
               </Card>
 
               {/* Section 1.2: Agent Interviewer */}
-              <Card data-training-section data-complete="false">
+              <Card data-training-section>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <MessageSquare className="w-5 h-5" />
@@ -176,7 +168,7 @@ const Training = () => {
               </Card>
 
               {/* Section 1.3: Connect Integrations */}
-              <Card data-training-section data-complete={effectiveTrainingStatus.integrationsCount >= effectiveTrainingStatus.thresholds.minIntegrations ? "true" : "false"}>
+              <Card data-training-section>
                 <CardHeader>
                   <CardTitle>3. Connect Integrations</CardTitle>
                   <CardDescription>
@@ -192,7 +184,10 @@ const Training = () => {
                       </h4>
                       <div className="grid md:grid-cols-2 gap-4">
                         {groupedIntegrations.communication.map((integration) => (
-                          <IntegrationCard key={integration.id} integration={integration} />
+                          <IntegrationCard
+                            key={integration.id}
+                            integration={integration}
+                          />
                         ))}
                       </div>
                     </div>
@@ -206,7 +201,10 @@ const Training = () => {
                       </h4>
                       <div className="grid md:grid-cols-2 gap-4">
                         {groupedIntegrations.storage.map((integration) => (
-                          <IntegrationCard key={integration.id} integration={integration} />
+                          <IntegrationCard
+                            key={integration.id}
+                            integration={integration}
+                          />
                         ))}
                       </div>
                     </div>
@@ -220,7 +218,10 @@ const Training = () => {
                       </h4>
                       <div className="grid md:grid-cols-2 gap-4">
                         {groupedIntegrations.ai_agent.map((integration) => (
-                          <IntegrationCard key={integration.id} integration={integration} />
+                          <IntegrationCard
+                            key={integration.id}
+                            integration={integration}
+                          />
                         ))}
                       </div>
                     </div>
@@ -235,9 +236,9 @@ const Training = () => {
               </Card>
 
               {/* Section 1.4: Record Insights */}
-              <Card data-training-section data-complete={effectiveTrainingStatus.insightsCount >= effectiveTrainingStatus.thresholds.minInsights ? "true" : "false"}>
+              <Card data-training-section>
                 <CardHeader>
-                  <CardTitle>1.4. Record Insights</CardTitle>
+                  <CardTitle>4. Record Insights</CardTitle>
                   <CardDescription>
                     Record voice notes or add text insights about yourself
                   </CardDescription>
@@ -252,11 +253,10 @@ const Training = () => {
             <div className="lg:col-span-1">
               <div className="sticky top-24">
                 <StatsCards
-                  documentsCount={effectiveTrainingStatus.documentsCount}
-                  integrationsCount={effectiveTrainingStatus.integrationsCount}
-                  insightsCount={effectiveTrainingStatus.insightsCount}
-                  lastActivity={stats?.lastActivity}
-                  progress={effectiveTrainingStatus.progress}
+                  documentsCount={effectiveStats.documentsCount}
+                  integrationsCount={effectiveStats.integrationsCount}
+                  insightsCount={effectiveStats.insightsCount}
+                  lastActivity={effectiveStats.lastActivity}
                 />
               </div>
             </div>
@@ -268,4 +268,3 @@ const Training = () => {
 };
 
 export default Training;
-
