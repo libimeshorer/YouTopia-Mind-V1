@@ -57,7 +57,7 @@ export const CrystalStash = ({
       <CardContent className="p-6">
         <div className="text-center space-y-4">
           {/* Header */}
-          <h3 className="font-semibold text-lg">Your Knowledge Crystals</h3>
+          <h3 className="font-semibold text-lg">Clone Training Progress</h3>
 
           {/* Crystal Image */}
           <div className="relative flex items-center justify-center min-h-[160px]">
@@ -80,7 +80,7 @@ export const CrystalStash = ({
           {/* Crystal Count */}
           <div className="space-y-1">
             <p className="text-2xl font-bold text-primary">
-              {crystalCount} crystal{crystalCount !== 1 ? "s" : ""}
+              {crystalCount} Knowledge Block{crystalCount !== 1 ? "s" : ""}
             </p>
             <p className="text-xs text-muted-foreground">
               {documentsCount} doc{documentsCount !== 1 ? "s" : ""} ·{" "}
@@ -100,7 +100,7 @@ export const CrystalStash = ({
 
           {crystalCount >= 8 && (
             <p className="text-sm text-primary font-medium">
-              Maximum crystal collection reached!
+              Continue training for improved performance!
             </p>
           )}
         </div>
