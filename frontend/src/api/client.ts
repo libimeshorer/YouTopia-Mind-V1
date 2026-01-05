@@ -2,7 +2,7 @@
  * API client for backend communication
  */
 
-import { Document, Insight, CloneAction, Conversation, Integration, TrainingStatus, ChatSession, ChatMessage, SendMessageRequest, SendMessageResponse } from "@/types";
+import { Document, Insight, CloneAction, Conversation, Integration, ChatSession, ChatMessage, SendMessageRequest, SendMessageResponse } from "@/types";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -269,8 +269,7 @@ export const apiClient = {
 
   // Training endpoints
   training: {
-    status: () => apiClient.get<TrainingStatus>("/api/clone/training/status"),
-    complete: () => apiClient.post<TrainingStatus>("/api/clone/training/complete"),
+    // Primary endpoint for crystal calculation - returns counts and last activity
     stats: () => apiClient.get<{ documentsCount: number; insightsCount: number; integrationsCount: number; dataPoints: number; lastActivity?: string }>("/api/clone/training/stats"),
   },
 

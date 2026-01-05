@@ -44,6 +44,7 @@ class Clone(Base):
     tenant = relationship("Tenant", back_populates="clones")
     documents = relationship("Document", back_populates="clone", cascade="all, delete-orphan")
     insights = relationship("Insight", back_populates="clone", cascade="all, delete-orphan")
+    # TODO: Remove when TrainingStatus table is dropped (no longer used - crystal metric is client-side)
     training_status = relationship("TrainingStatus", back_populates="clone", uselist=False, cascade="all, delete-orphan")
     integrations = relationship("Integration", back_populates="clone", cascade="all, delete-orphan")
     messages = relationship("Message", back_populates="clone", cascade="all, delete-orphan")
@@ -127,8 +128,11 @@ class Insight(Base):
     clone = relationship("Clone", back_populates="insights")
 
 
+# TODO: Remove TrainingStatus table entirely - no longer used.
+# Crystal-based engagement is now calculated client-side from doc/insight/integration counts.
+# Migration required: DROP TABLE training_status; also remove Clone.training_status relationship.
 class TrainingStatus(Base):
-    """Training status model - tracks clone's training progress"""
+    """Training status model - DEPRECATED, kept for backwards compatibility"""
     __tablename__ = "training_status"
     
     clone_id = Column(UUID(as_uuid=True), ForeignKey("clones.id", ondelete="CASCADE"), primary_key=True)

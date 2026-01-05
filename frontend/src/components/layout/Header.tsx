@@ -5,9 +5,6 @@ import { Link, useLocation } from "react-router-dom";
 import { ROUTES } from "@/constants/routes";
 import { clerkConfig } from "@/lib/clerk";
 import { useEffect, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { apiClient } from "@/api/client";
-import { TrainingStatus } from "@/types";
 
 // Sign In button component (reusable)
 const SignInButton = () => (
@@ -43,16 +40,6 @@ const ClerkHeader = () => {
   const isLoaded = auth?.isLoaded ?? false;
   const isSignedIn = auth?.isSignedIn ?? false;
   const [showFallback, setShowFallback] = useState(false);
-
-  const { data: trainingStatus } = useQuery<TrainingStatus>({
-    queryKey: ["trainingStatus"],
-    queryFn: () => apiClient.training.status(),
-    enabled: isSignedIn,
-    retry: 1,
-  });
-
-  const showTrainingLink = isSignedIn && trainingStatus && !trainingStatus.isComplete;
-  const showActivityLink = isSignedIn && trainingStatus && trainingStatus.isComplete;
 
   useEffect(() => {
     if (isLoaded) {
@@ -96,30 +83,27 @@ const ClerkHeader = () => {
       <div className="container mx-auto flex justify-between items-center">
         <div className="flex items-center gap-4">
           <SignedIn>
-            {showTrainingLink && (
-              <Link
-                to={ROUTES.TRAINING}
-                className={`text-sm font-medium transition-colors ${
-                  location.pathname === ROUTES.TRAINING
-                    ? "text-primary"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                Training
-              </Link>
-            )}
-            {showActivityLink && (
-              <Link
-                to={ROUTES.ACTIVITY}
-                className={`text-sm font-medium transition-colors ${
-                  location.pathname === ROUTES.ACTIVITY
-                    ? "text-primary"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                Activity
-              </Link>
-            )}
+            {/* Always show both Training and Activity links */}
+            <Link
+              to={ROUTES.TRAINING}
+              className={`text-sm font-medium transition-colors ${
+                location.pathname === ROUTES.TRAINING
+                  ? "text-primary"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              Training
+            </Link>
+            <Link
+              to={ROUTES.ACTIVITY}
+              className={`text-sm font-medium transition-colors ${
+                location.pathname === ROUTES.ACTIVITY
+                  ? "text-primary"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              Activity
+            </Link>
           </SignedIn>
         </div>
         <div className="flex items-center gap-3">
@@ -179,5 +163,3 @@ const Header = () => {
 };
 
 export default Header;
-
-
