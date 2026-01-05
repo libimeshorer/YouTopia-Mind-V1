@@ -80,7 +80,7 @@ export const CrystalStash = ({
           {/* Crystal Count */}
           <div className="space-y-1">
             <p className="text-2xl font-bold text-primary">
-              {crystalCount} Knowledge Block{crystalCount !== 1 ? "s" : ""}
+              {totalItems} Knowledge Block{totalItems !== 1 ? "s" : ""}
             </p>
             <p className="text-xs text-muted-foreground">
               {documentsCount} doc{documentsCount !== 1 ? "s" : ""} ·{" "}
