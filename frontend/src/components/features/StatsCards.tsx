@@ -32,7 +32,8 @@ export const StatsCards = ({
     return date.toLocaleDateString();
   };
 
-  // const stats = [
+  // TODO: Uncomment this if want to restore the old stats grid OR remove this completely once decided.
+  //  const stats = [
   //   {
   //     icon: FileText,
   //     label: "Documents",

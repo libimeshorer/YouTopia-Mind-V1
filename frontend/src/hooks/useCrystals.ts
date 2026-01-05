@@ -1,6 +1,7 @@
 /**
  * Hook to calculate crystal count based on training activity
  *
+ * TODO: Revisit this logic and improve it based on user feedback (espcially CrystalCount and milestones calc).
  * Crystal milestones are earned by:
  * 1. Starting a new category (first doc, first insight, first integration) = +1 crystal each
  * 2. Reaching total item thresholds (3, 6, 10, 15, 22, 30, 40+ items)
