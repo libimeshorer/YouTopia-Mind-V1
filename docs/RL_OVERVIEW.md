@@ -50,10 +50,12 @@ User Message
 | Component | File | Purpose |
 |-----------|------|---------|
 | Migration | `alembic/versions/002_add_chunk_scores.py` | Creates `chunk_scores` table |
-| Model | `src/database/models.py` | `ChunkScore` SQLAlchemy model |
-| Service | `src/services/chunk_score_service.py` | Score updates and retrieval |
+| Migration | `alembic/versions/003_add_enhanced_feedback.py` | Adds enhanced feedback columns |
+| Model | `src/database/models.py` | `ChunkScore` + `Message` feedback fields |
+| Service | `src/services/chunk_score_service.py` | Score updates (with weight support) |
 | Retriever | `src/rag/retriever.py` | Applies score boosts during retrieval |
-| Integration | `src/services/chat_service.py` | Connects feedback to score updates |
+| Integration | `src/services/chat_service.py` | Enhanced feedback + RL score updates |
+| API | `src/api/routers/chat.py` | Feedback endpoint with dual ratings |
 
 ---
 
@@ -97,6 +99,68 @@ When no feedback exists for a clone:
 3. Retrieval works exactly as before (pure semantic similarity)
 4. First feedback creates first score entry
 5. Learning ramps up gradually as feedback accumulates
+
+---
+
+## Enhanced Feedback System
+
+The feedback system supports dual-dimension ratings and differentiates between feedback sources.
+
+### Feedback Dimensions
+
+| Dimension | Who | Values | Purpose |
+|-----------|-----|--------|---------|
+| Content Rating | Everyone | -1, +1 | "Was this response helpful?" |
+| Style Rating | Owner only | -1, 0, +1 | "Does this sound like me?" |
+| Feedback Text | Everyone | Free text | Optional correction on negative feedback |
+
+### Feedback Sources
+
+Two feedback sources are tracked:
+
+1. **Owner** (`feedback_source='owner'`):
+   - The clone's creator/owner
+   - Can rate both content AND style
+   - Feedback weighted **2x** for chunk scoring
+   - Most valuable signal for personalization
+
+2. **External User** (`feedback_source='external_user'`):
+   - Someone chatting with the clone (e.g., colleague, customer)
+   - Can rate content only
+   - Feedback weighted **1x** for chunk scoring
+   - Still valuable for content quality learning
+
+### Owner 2x Weight
+
+Owner feedback is weighted double because:
+- Owners know what "good" looks like for their clone
+- Owners are more invested in quality
+- Style feedback is only available from owners
+
+```python
+# In ChunkScoreService.update_scores_from_feedback():
+weight = 2.0 if feedback_source == 'owner' else 1.0
+score = score * DECAY + rating * LEARNING_RATE * weight
+```
+
+### Database Schema
+
+```sql
+-- Messages table additions (migration 003):
+ALTER TABLE messages ADD COLUMN style_rating INTEGER;       -- -1, 0, 1, or NULL
+ALTER TABLE messages ADD COLUMN feedback_source VARCHAR(20); -- 'owner' or 'external_user'
+ALTER TABLE messages ADD COLUMN feedback_text TEXT;          -- Optional correction
+```
+
+### API Schema
+
+```python
+class SubmitFeedbackRequest(BaseModel):
+    contentRating: int           # Required: -1 or 1
+    feedbackSource: str          # Required: 'owner' or 'external_user'
+    styleRating: Optional[int]   # Optional: -1, 0, or 1 (owner only)
+    feedbackText: Optional[str]  # Optional: correction text
+```
 
 ---
 

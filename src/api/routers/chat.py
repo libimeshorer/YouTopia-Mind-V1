@@ -43,6 +43,9 @@ class ChatMessageResponse(BaseModel):
     tokensUsed: Optional[int] = None
     responseTimeMs: Optional[int] = None
     feedbackRating: Optional[int] = None
+    styleRating: Optional[int] = None
+    feedbackSource: Optional[str] = None
+    feedbackText: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -61,8 +64,18 @@ class SendMessageResponse(BaseModel):
 
 
 class SubmitFeedbackRequest(BaseModel):
-    """Submit feedback request model"""
-    rating: int  # -1 or 1
+    """Submit feedback request model
+
+    Enhanced feedback supports:
+    - Content rating (required): Was the response helpful? (-1 or 1)
+    - Style rating (optional, owner only): Does it sound like me? (-1, 0, or 1)
+    - Feedback source (required): Who is giving feedback? ('owner' or 'external_user')
+    - Feedback text (optional): Correction text on negative feedback
+    """
+    contentRating: int  # Required: -1 (thumbs down) or 1 (thumbs up)
+    feedbackSource: str  # Required: 'owner' or 'external_user'
+    styleRating: Optional[int] = None  # Optional: -1, 0, or 1 (owner only)
+    feedbackText: Optional[str] = None  # Optional: correction text
 
 
 # ===== Helper Functions =====
@@ -80,6 +93,9 @@ def message_to_response(message: Message) -> ChatMessageResponse:
         tokensUsed=message.tokens_used,
         responseTimeMs=message.response_time_ms,
         feedbackRating=message.feedback_rating,
+        styleRating=message.style_rating,
+        feedbackSource=message.feedback_source,
+        feedbackText=message.feedback_text,
     )
 
 
@@ -213,7 +229,14 @@ async def submit_message_feedback(
     clone_ctx: CloneContext = Depends(get_clone_context),
     db: Session = Depends(get_db)
 ):
-    """Submit feedback (thumbs up/down) for a clone message"""
+    """Submit enhanced feedback for a clone message.
+
+    Supports dual-dimension feedback:
+    - Content rating: Was the response helpful? (required)
+    - Style rating: Does it sound like me? (optional, owner only)
+
+    Owner feedback is weighted 2x for RL chunk scoring.
+    """
     try:
         message_uuid = UUID(message_id)
     except ValueError:
@@ -226,7 +249,10 @@ async def submit_message_feedback(
         chat_service = ChatService(clone_id=clone_ctx.clone_id, tenant_id=clone_ctx.tenant_id, db=db)
         chat_service.submit_feedback(
             message_id=message_uuid,
-            rating=request.rating,
+            content_rating=request.contentRating,
+            feedback_source=request.feedbackSource,
+            style_rating=request.styleRating,
+            feedback_text=request.feedbackText,
         )
 
         return None
