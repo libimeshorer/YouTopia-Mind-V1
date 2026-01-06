@@ -1,26 +1,33 @@
 /**
  * Hook to calculate crystal count based on training activity
  *
- * TODO: Revisit this logic and improve it based on user feedback (espcially CrystalCount and milestones calc).
+ * TODO: Revisit this logic and improve it based on user feedback (especially CrystalCount and milestones calc).
  * Crystal milestones are earned by:
  * 1. Starting a new category (first doc, first insight, first integration) = +1 crystal each
- * 2. Reaching total item thresholds (3, 6, 10, 15, 22, 30, 40+ items)
+ * 2. Reaching total item thresholds (See VOLUME_THRESHOLDS array below)
+ *
+ * Crystal images progression:
+ * - 0 crystals: no image (empty state)
+ * - 1 crystal (any activity): YouTopia crystal logo
+ * - 2-9 crystals: crystal-pile-1.png through crystal-pile-8.png
  */
 
 // Thresholds for earning crystals based on total items
-const VOLUME_THRESHOLDS = [3, 6, 10, 15, 22, 30, 40];
+const VOLUME_THRESHOLDS = [5, 12, 20, 30, 50, 70, 100];
 
-// Crystal pile images (1-8 crystals)
+// Crystal pile images (0-9 crystals)
+// Index 0 = no crystals, Index 1 = logo (first crystal), Index 2-9 = pile images
 const CRYSTAL_IMAGES = [
   null, // 0 crystals - no image
-  "crystal-pile-1.png",
-  "crystal-pile-2.png",
-  "crystal-pile-3.png",
-  "crystal-pile-4.png",
-  "crystal-pile-5.png",
-  "crystal-pile-6.png",
-  "crystal-pile-7.png",
-  "crystal-pile-8.png",
+  "youtopia-crystal-logo.png", // 1 crystal - the single crystal logo
+  "crystal-pile-1.png", // 2 crystals
+  "crystal-pile-2.png", // 3 crystals
+  "crystal-pile-3.png", // 4 crystals
+  "crystal-pile-4.png", // 5 crystals
+  "crystal-pile-5.png", // 6 crystals
+  "crystal-pile-6.png", // 7 crystals
+  "crystal-pile-7.png", // 8 crystals
+  "crystal-pile-8.png", // 9 crystals (max)
 ];
 
 export interface CrystalStatus {
@@ -44,10 +51,9 @@ export function calculateCrystals(
 ): CrystalStatus {
   const totalItems = documentsCount + insightsCount + integrationsCount;
 
-  // Count unique categories started (first-time bonuses)
+  // Count unique categories started (first-time bonuses) - for documents and integrations only, not including insights
   const categoriesStarted =
     (documentsCount > 0 ? 1 : 0) +
-    (insightsCount > 0 ? 1 : 0) +
     (integrationsCount > 0 ? 1 : 0);
 
   // Calculate crystals from volume thresholds
@@ -59,8 +65,8 @@ export function calculateCrystals(
   }
 
   // Total crystals = categories started + volume-based crystals
-  // But cap at 8 (max image we have)
-  const crystalCount = Math.min(8, categoriesStarted + volumeCrystals);
+  // Cap at 9 (max image we have: logo + 8 pile images)
+  const crystalCount = Math.min(9, categoriesStarted + volumeCrystals);
 
   // Determine the crystal image
   const crystalImage = crystalCount > 0 ? CRYSTAL_IMAGES[crystalCount] : null;
@@ -68,7 +74,7 @@ export function calculateCrystals(
   // Calculate next milestone
   let nextMilestone: CrystalStatus["nextMilestone"] = null;
 
-  if (crystalCount < 8) {
+  if (crystalCount < 9) {
     // First check if they can earn a category crystal
     if (categoriesStarted < 3) {
       const missingCategories = [];
