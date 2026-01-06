@@ -1,31 +1,29 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { useCrystals } from "@/hooks/useCrystals";
 
-// TODO: Uncomment these imports once crystal pile images are added to the codebase
-// import crystalPile1 from "@/assets/crystals/crystal-pile-1.png";
-// import crystalPile2 from "@/assets/crystals/crystal-pile-2.png";
-// import crystalPile3 from "@/assets/crystals/crystal-pile-3.png";
-// import crystalPile4 from "@/assets/crystals/crystal-pile-4.png";
-// import crystalPile5 from "@/assets/crystals/crystal-pile-5.png";
-// import crystalPile6 from "@/assets/crystals/crystal-pile-6.png";
-// import crystalPile7 from "@/assets/crystals/crystal-pile-7.png";
-// import crystalPile8 from "@/assets/crystals/crystal-pile-8.png";
+// Crystal pile images: logo (index 0) + 8 pile images (indices 1-8)
+import crystalPile0 from "@/assets/logos/youtopia-crystal-logo.png";
+import crystalPile1 from "@/assets/crystals/crystal-pile-1.png";
+import crystalPile2 from "@/assets/crystals/crystal-pile-2.png";
+import crystalPile3 from "@/assets/crystals/crystal-pile-3.png";
+import crystalPile4 from "@/assets/crystals/crystal-pile-4.png";
+import crystalPile5 from "@/assets/crystals/crystal-pile-5.png";
+import crystalPile6 from "@/assets/crystals/crystal-pile-6.png";
+import crystalPile7 from "@/assets/crystals/crystal-pile-7.png";
+import crystalPile8 from "@/assets/crystals/crystal-pile-8.png";
 
-// TODO: Uncomment this mapping once crystal pile images are added
-// const CRYSTAL_IMAGES: Record<string, string> = {
-//   "crystal-pile-1.png": crystalPile1,
-//   "crystal-pile-2.png": crystalPile2,
-//   "crystal-pile-3.png": crystalPile3,
-//   "crystal-pile-4.png": crystalPile4,
-//   "crystal-pile-5.png": crystalPile5,
-//   "crystal-pile-6.png": crystalPile6,
-//   "crystal-pile-7.png": crystalPile7,
-//   "crystal-pile-8.png": crystalPile8,
-// };
-
-// TODO: Remove this temporary import once crystal pile images are added
-// Using existing YouTopia crystal logo as placeholder for any training activity
-import youtopiaСrystal from "@/assets/logos/youtopia-crystal-logo.png";
+// Map filename from useCrystals hook to imported image
+const CRYSTAL_IMAGES: Record<string, string> = {
+  "youtopia-crystal-logo.png": crystalPile0,
+  "crystal-pile-1.png": crystalPile1,
+  "crystal-pile-2.png": crystalPile2,
+  "crystal-pile-3.png": crystalPile3,
+  "crystal-pile-4.png": crystalPile4,
+  "crystal-pile-5.png": crystalPile5,
+  "crystal-pile-6.png": crystalPile6,
+  "crystal-pile-7.png": crystalPile7,
+  "crystal-pile-8.png": crystalPile8,
+};
 
 interface CrystalStashProps {
   documentsCount: number;
@@ -38,19 +36,14 @@ export const CrystalStash = ({
   insightsCount,
   integrationsCount,
 }: CrystalStashProps) => {
-  const { crystalCount, totalItems, nextMilestone } = useCrystals(
+  const { crystalCount, crystalImage, totalItems, nextMilestone } = useCrystals(
     documentsCount,
     insightsCount,
     integrationsCount
   );
 
-  // TODO: Remove this temporary logic once crystal pile images are added
-  // For now, show the YouTopia crystal if ANY training activity exists
-  const hasAnyActivity = totalItems > 0;
-  const imageSrc = hasAnyActivity ? youtopiaСrystal : null;
-
-  // TODO: Restore this logic once crystal pile images are added
-  // const imageSrc = crystalImage ? CRYSTAL_IMAGES[crystalImage] : null;
+  // Get the actual image source from the crystalImage filename
+  const imageSrc = crystalImage ? CRYSTAL_IMAGES[crystalImage] : null;
 
   return (
     <Card className="bg-gradient-to-r from-primary/10 to-primary/5 border-primary/20">
@@ -90,7 +83,7 @@ export const CrystalStash = ({
           </div>
 
           {/* Next Milestone */}
-          {nextMilestone && crystalCount < 8 && (
+          {nextMilestone && crystalCount < 9 && (
             <p className="text-sm text-muted-foreground">
               {nextMilestone.remaining} more item
               {nextMilestone.remaining !== 1 ? "s" : ""} to earn your next
@@ -98,7 +91,7 @@ export const CrystalStash = ({
             </p>
           )}
 
-          {crystalCount >= 8 && (
+          {crystalCount >= 9 && (
             <p className="text-sm text-primary font-medium">
               Continue training for improved performance!
             </p>
