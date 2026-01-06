@@ -4,7 +4,7 @@
  * TODO: Revisit this logic and improve it based on user feedback (especially CrystalCount and milestones calc).
  * Crystal milestones are earned by:
  * 1. Starting a new category (first doc, first insight, first integration) = +1 crystal each
- * 2. Reaching total item thresholds (3, 6, 10, 15, 22, 30, 40+ items)
+ * 2. Reaching total item thresholds (See VOLUME_THRESHOLDS array below)
  *
  * Crystal images progression:
  * - 0 crystals: no image (empty state)
@@ -13,7 +13,7 @@
  */
 
 // Thresholds for earning crystals based on total items
-const VOLUME_THRESHOLDS = [3, 6, 10, 15, 22, 30, 40];
+const VOLUME_THRESHOLDS = [5, 12, 20, 30, 50, 70, 100];
 
 // Crystal pile images (0-9 crystals)
 // Index 0 = no crystals, Index 1 = logo (first crystal), Index 2-9 = pile images
@@ -51,10 +51,9 @@ export function calculateCrystals(
 ): CrystalStatus {
   const totalItems = documentsCount + insightsCount + integrationsCount;
 
-  // Count unique categories started (first-time bonuses)
+  // Count unique categories started (first-time bonuses) - for documents and integrations only, not including insights
   const categoriesStarted =
     (documentsCount > 0 ? 1 : 0) +
-    (insightsCount > 0 ? 1 : 0) +
     (integrationsCount > 0 ? 1 : 0);
 
   // Calculate crystals from volume thresholds
