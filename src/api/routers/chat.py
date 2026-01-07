@@ -64,17 +64,19 @@ class SendMessageResponse(BaseModel):
 
 
 class SubmitFeedbackRequest(BaseModel):
-    """Submit feedback request model
+    """Submit feedback request model (owner-only endpoint)
 
     Enhanced feedback supports:
     - Content rating (required): Was the response helpful? (-1 or 1)
-    - Style rating (optional, owner only): Does it sound like me? (-1, 0, or 1)
-    - Feedback source (required): Who is giving feedback? ('owner' or 'external_user')
+    - Style rating (optional): Does it sound like me? (-1, 0, or 1)
     - Feedback text (optional): Correction text on negative feedback
+
+    Note: feedback_source is derived server-side from authentication context.
+    This endpoint requires auth, so feedback_source is always 'owner'.
+    External user feedback requires a separate public endpoint (TODO).
     """
     contentRating: int  # Required: -1 (thumbs down) or 1 (thumbs up)
-    feedbackSource: str  # Required: 'owner' or 'external_user'
-    styleRating: Optional[int] = None  # Optional: -1, 0, or 1 (owner only)
+    styleRating: Optional[int] = None  # Optional: -1, 0, or 1
     feedbackText: Optional[str] = None  # Optional: correction text
 
 
@@ -258,13 +260,16 @@ async def submit_message_feedback(
     clone_ctx: CloneContext = Depends(get_clone_context),
     db: Session = Depends(get_db)
 ):
-    """Submit enhanced feedback for a clone message.
+    """Submit enhanced feedback for a clone message (owner-only endpoint).
 
     Supports dual-dimension feedback:
     - Content rating: Was the response helpful? (required)
-    - Style rating: Does it sound like me? (optional, owner only)
+    - Style rating: Does it sound like me? (optional)
 
     Owner feedback is weighted 2x for RL chunk scoring.
+
+    Note: This endpoint requires authentication, so feedback_source is always 'owner'.
+    TODO: Create separate public endpoint for external user feedback with 1x weight.
     """
     try:
         message_uuid = UUID(message_id)
@@ -279,7 +284,7 @@ async def submit_message_feedback(
         chat_service.submit_feedback(
             message_id=message_uuid,
             content_rating=request.contentRating,
-            feedback_source=request.feedbackSource,
+            feedback_source="owner",  # Derived from auth - this endpoint is owner-only
             style_rating=request.styleRating,
             feedback_text=request.feedbackText,
         )

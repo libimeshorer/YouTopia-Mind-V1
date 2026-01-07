@@ -123,12 +123,16 @@ Two feedback sources are tracked:
    - Can rate both content AND style
    - Feedback weighted **2x** for chunk scoring
    - Most valuable signal for personalization
+   - Uses authenticated `/chat/message/{id}/feedback` endpoint
 
 2. **External User** (`feedback_source='external_user'`):
    - Someone chatting with the clone (e.g., colleague, customer)
    - Can rate content only
    - Feedback weighted **1x** for chunk scoring
    - Still valuable for content quality learning
+   - TODO: Requires separate public endpoint (not yet implemented)
+
+**Security Note:** `feedback_source` is derived server-side from authentication context, not from client request. The authenticated feedback endpoint always sets `feedback_source='owner'`.
 
 ### Owner 2x Weight
 
@@ -143,6 +147,25 @@ weight = 2.0 if feedback_source == 'owner' else 1.0
 score = score * DECAY + rating * LEARNING_RATE * weight
 ```
 
+### Duplicate Feedback Protection
+
+Chunk scores are only updated on the **first** feedback submission for a message:
+
+```python
+# In ChatService.submit_feedback():
+already_has_feedback = message.feedback_rating is not None
+if already_has_feedback:
+    # Update stored rating but skip RL update
+    return message
+```
+
+**Why?** Without this protection:
+1. User submits thumbs-up → chunks get +0.2
+2. User changes to thumbs-down → chunks get another -0.2
+3. Net effect: chunks were updated twice, scores don't reflect final rating
+
+With protection: Re-submitting feedback updates the stored rating but doesn't re-update chunk scores. This prevents gaming (spam feedback) and accidental double-counting.
+
 ### Database Schema
 
 ```sql
@@ -155,11 +178,12 @@ ALTER TABLE messages ADD COLUMN feedback_text TEXT;          -- Optional correct
 ### API Schema
 
 ```python
+# Owner feedback endpoint: POST /chat/message/{id}/feedback
 class SubmitFeedbackRequest(BaseModel):
     contentRating: int           # Required: -1 or 1
-    feedbackSource: str          # Required: 'owner' or 'external_user'
-    styleRating: Optional[int]   # Optional: -1, 0, or 1 (owner only)
+    styleRating: Optional[int]   # Optional: -1, 0, or 1
     feedbackText: Optional[str]  # Optional: correction text
+    # Note: feedbackSource derived server-side (always 'owner' for this endpoint)
 ```
 
 ---
