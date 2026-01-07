@@ -65,6 +65,18 @@ class SubmitFeedbackRequest(BaseModel):
     rating: int  # -1 or 1
 
 
+class CloneInfoResponse(BaseModel):
+    """Clone information response model"""
+    cloneId: str
+    tenantId: str
+    firstName: Optional[str] = None
+    lastName: Optional[str] = None
+    email: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
 # ===== Helper Functions =====
 
 def message_to_response(message: Message) -> ChatMessageResponse:
@@ -84,6 +96,23 @@ def message_to_response(message: Message) -> ChatMessageResponse:
 
 
 # ===== API Endpoints =====
+
+@router.get("/info", response_model=CloneInfoResponse)
+async def get_clone_info(
+    clone_ctx: CloneContext = Depends(get_clone_context),
+):
+    """
+    Get current user's clone information.
+    Lightweight endpoint that returns clone ID and basic info without any side effects.
+    """
+    return CloneInfoResponse(
+        cloneId=str(clone_ctx.clone_id),
+        tenantId=str(clone_ctx.tenant_id),
+        firstName=clone_ctx.clone.first_name,
+        lastName=clone_ctx.clone.last_name,
+        email=clone_ctx.clone.email,
+    )
+
 
 @router.post("/chat/session", response_model=ChatSessionResponse, status_code=status.HTTP_200_OK)
 async def create_or_resume_session(

@@ -5,6 +5,8 @@ import { Link, useLocation } from "react-router-dom";
 import { ROUTES } from "@/constants/routes";
 import { clerkConfig } from "@/lib/clerk";
 import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { apiClient } from "@/api/client";
 
 // Sign In button component (reusable)
 const SignInButton = () => (
@@ -40,6 +42,17 @@ const ClerkHeader = () => {
   const isLoaded = auth?.isLoaded ?? false;
   const isSignedIn = auth?.isSignedIn ?? false;
   const [showFallback, setShowFallback] = useState(false);
+
+  // Check if we're on chat page
+  const isOnChatPage = location.pathname.startsWith("/chat/");
+
+  // Fetch clone info only if signed in and NOT on chat page
+  const { data: cloneInfo } = useQuery({
+    queryKey: ["cloneInfo"],
+    queryFn: () => apiClient.clone.getInfo(),
+    enabled: isSignedIn && !isOnChatPage, // Only fetch when needed
+    staleTime: 10 * 60 * 1000, // Cache for 10 minutes
+  });
 
   useEffect(() => {
     if (isLoaded) {
@@ -83,7 +96,7 @@ const ClerkHeader = () => {
       <div className="container mx-auto flex justify-between items-center">
         <div className="flex items-center gap-4">
           <SignedIn>
-            {/* Always show both Training and Activity links */}
+            {/* Always show Training link */}
             <Link
               to={ROUTES.TRAINING}
               className={`text-sm font-medium transition-colors ${
@@ -94,16 +107,15 @@ const ClerkHeader = () => {
             >
               Training
             </Link>
-            <Link
-              to={ROUTES.ACTIVITY}
-              className={`text-sm font-medium transition-colors ${
-                location.pathname === ROUTES.ACTIVITY
-                  ? "text-primary"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              Activity
-            </Link>
+            {/* Show Chat link only when NOT on chat page and cloneId is available */}
+            {!isOnChatPage && cloneInfo?.cloneId && (
+              <Link
+                to={ROUTES.CHAT(cloneInfo.cloneId)}
+                className="text-sm font-medium transition-colors text-muted-foreground hover:text-foreground"
+              >
+                Chat
+              </Link>
+            )}
           </SignedIn>
         </div>
         <div className="flex items-center gap-3">
