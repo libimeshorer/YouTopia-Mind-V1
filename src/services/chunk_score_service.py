@@ -41,18 +41,20 @@ class ChunkScoreService:
         self,
         clone_id: UUID,
         rag_context: Dict,
-        rating: int
+        rating: int,
+        weight: float = 1.0
     ) -> int:
         """Update chunk scores when user submits feedback on a response.
 
         Uses PostgreSQL UPSERT to atomically update scores with EMA:
-        - New chunks: score = rating * RL_LEARNING_RATE
-        - Existing chunks: score = score * RL_DECAY + rating * RL_LEARNING_RATE
+        - New chunks: score = rating * RL_LEARNING_RATE * weight
+        - Existing chunks: score = score * RL_DECAY + rating * RL_LEARNING_RATE * weight
 
         Args:
             clone_id: The clone that generated the response
             rag_context: The rag_context_json from the message (contains chunks)
             rating: +1 (thumbs up) or -1 (thumbs down)
+            weight: Feedback weight multiplier (default 1.0, owner feedback uses 2.0)
 
         Returns:
             Number of chunks updated
@@ -63,6 +65,7 @@ class ChunkScoreService:
             return 0
 
         updated_count = 0
+        weighted_learning_rate = RL_LEARNING_RATE * weight
 
         for chunk in chunks:
             content = chunk.get("content", "")
@@ -71,16 +74,16 @@ class ChunkScoreService:
 
             chunk_hash = hash_chunk_content(content)
 
-            # PostgreSQL UPSERT with exponential moving average
+            # PostgreSQL UPSERT with exponential moving average (weighted)
             stmt = insert(ChunkScore).values(
                 clone_id=clone_id,
                 chunk_hash=chunk_hash,
-                score=rating * RL_LEARNING_RATE,
+                score=rating * weighted_learning_rate,
                 hit_count=1
             ).on_conflict_do_update(
                 index_elements=['clone_id', 'chunk_hash'],
                 set_={
-                    'score': ChunkScore.score * RL_DECAY + rating * RL_LEARNING_RATE,
+                    'score': ChunkScore.score * RL_DECAY + rating * weighted_learning_rate,
                     'hit_count': ChunkScore.hit_count + 1
                 }
             )
@@ -93,6 +96,7 @@ class ChunkScoreService:
             "Chunk scores updated from feedback",
             clone_id=str(clone_id),
             rating=rating,
+            weight=weight,
             chunks_updated=updated_count
         )
 

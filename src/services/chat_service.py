@@ -294,26 +294,49 @@ class ChatService:
 
         return user_msg, clone_msg
 
-    def submit_feedback(self, message_id: UUID, rating: int) -> Message:
+    def submit_feedback(
+        self,
+        message_id: UUID,
+        content_rating: int,
+        feedback_source: str,
+        style_rating: Optional[int] = None,
+        feedback_text: Optional[str] = None,
+    ) -> Message:
         """
         Submit feedback for a clone message and update RL chunk scores.
 
         This method:
         1. Validates the feedback
-        2. Updates the message's feedback_rating
+        2. Updates the message's feedback fields
         3. Updates chunk scores based on which chunks were used in this response
+           (owner feedback weighted 2x)
 
         Args:
             message_id: The clone message to rate
-            rating: -1 (thumbs down) or 1 (thumbs up)
+            content_rating: -1 (thumbs down) or 1 (thumbs up) for content quality
+            feedback_source: 'owner' or 'external_user'
+            style_rating: Optional -1, 0, or 1 for "sounds like me" (owner only)
+            feedback_text: Optional correction text on negative feedback
 
         Returns:
             The updated message
 
         See docs/RL_OVERVIEW.md for details on how feedback affects chunk scores.
         """
-        if rating not in [-1, 1]:
-            raise ValueError("Rating must be -1 (thumbs down) or 1 (thumbs up)")
+        # Validate content rating
+        if content_rating not in [-1, 1]:
+            raise ValueError("content_rating must be -1 (thumbs down) or 1 (thumbs up)")
+
+        # Validate feedback source
+        if feedback_source not in ['owner', 'external_user']:
+            raise ValueError("feedback_source must be 'owner' or 'external_user'")
+
+        # Validate style rating (optional, owner only)
+        if style_rating is not None:
+            if style_rating not in [-1, 0, 1]:
+                raise ValueError("style_rating must be -1, 0, or 1")
+            if feedback_source != 'owner':
+                raise ValueError("style_rating is only available for owner feedback")
 
         # Get message
         message = self.db.query(Message).filter(Message.id == message_id).first()
@@ -324,25 +347,54 @@ class ChatService:
             raise ValueError(f"Message {message_id} does not belong to clone {self.clone_id}")
 
         if message.role != 'clone':
-            raise ValueError(f"Can only submit feedback for clone messages")
+            raise ValueError("Can only submit feedback for clone messages")
 
-        # Update feedback rating on the message
-        message.feedback_rating = rating
+        # Check if this message already has feedback (to avoid compounding RL updates)
+        already_has_feedback = message.feedback_rating is not None
+
+        # Update feedback fields on the message
+        message.feedback_rating = content_rating
+        message.feedback_source = feedback_source
+        message.style_rating = style_rating
+        message.feedback_text = feedback_text
+        # TODO: style_rating is stored for future Stage 3 style learning (see RL_OVERVIEW.md)
+        # Currently only content_rating affects chunk scores.
         self.db.commit()
         self.db.refresh(message)
 
+        # Determine weight: owner feedback counts 2x
+        weight = 2.0 if feedback_source == 'owner' else 1.0
+
         # Update chunk scores for RL-based learning
+        # IMPORTANT: Skip RL update if feedback already existed to prevent compounding.
+        # Re-submitting feedback updates the stored rating but doesn't re-update chunk scores.
+        # This prevents gaming (spam feedback) and accidental double-counting.
+        if already_has_feedback:
+            logger.info(
+                "Feedback updated (RL scores unchanged - feedback already existed)",
+                message_id=str(message_id),
+                content_rating=content_rating,
+                style_rating=style_rating,
+                feedback_source=feedback_source,
+                session_id=message.session_id,
+            )
+            return message
+
         # This uses the RAG context stored with the message to know which chunks to update
         if message.rag_context_json:
             chunks_updated = self.chunk_score_service.update_scores_from_feedback(
                 clone_id=self.clone_id,
                 rag_context=message.rag_context_json,
-                rating=rating
+                rating=content_rating,
+                weight=weight,
             )
             logger.info(
                 "Feedback submitted with RL update",
                 message_id=str(message_id),
-                rating=rating,
+                content_rating=content_rating,
+                style_rating=style_rating,
+                feedback_source=feedback_source,
+                weight=weight,
                 session_id=message.session_id,
                 chunks_updated=chunks_updated,
             )
@@ -350,7 +402,9 @@ class ChatService:
             logger.info(
                 "Feedback submitted (no RAG context for RL)",
                 message_id=str(message_id),
-                rating=rating,
+                content_rating=content_rating,
+                style_rating=style_rating,
+                feedback_source=feedback_source,
                 session_id=message.session_id,
             )
 

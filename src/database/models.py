@@ -192,8 +192,13 @@ class Message(Base):
     rag_context_json = Column(JSON, nullable=True)
     
     # Feedback (for clone messages)
-    feedback_rating = Column(Integer, nullable=True)  # -1, 1, or null
-    feedback_comment = Column(Text, nullable=True)
+    feedback_rating = Column(Integer, nullable=True)  # Content rating: -1, 1, or null
+    feedback_comment = Column(Text, nullable=True)    # Legacy field (unused)
+
+    # Enhanced feedback (see docs/RL_OVERVIEW.md)
+    style_rating = Column(Integer, nullable=True)     # Style rating: -1, 0, 1, or null (owner only)
+    feedback_source = Column(String(20), nullable=True)  # 'owner' or 'external_user'
+    feedback_text = Column(Text, nullable=True)       # Optional correction text on negative feedback
     
     # Performance metrics (for clone messages)
     tokens_used = Column(Integer, nullable=True)
