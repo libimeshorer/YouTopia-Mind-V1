@@ -1,10 +1,12 @@
-import { SignedIn, SignedOut, UserButton, useAuth } from "@clerk/clerk-react";
+import { SignedIn, SignedOut, UserButton, useAuth, useUser } from "@clerk/clerk-react";
 import { Button } from "@/components/ui/button";
 import { LogIn, UserPlus } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { ROUTES } from "@/constants/routes";
 import { clerkConfig } from "@/lib/clerk";
 import { useEffect, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { apiClient } from "@/api/client";
 
 // Sign In button component (reusable)
 const SignInButton = () => (
@@ -36,10 +38,33 @@ const SignUpButton = () => (
 // Header with Clerk integration (only used when ClerkProvider is present)
 const ClerkHeader = () => {
   const auth = useAuth();
+  const { user } = useUser();
   const location = useLocation();
+  const queryClient = useQueryClient();
   const isLoaded = auth?.isLoaded ?? false;
   const isSignedIn = auth?.isSignedIn ?? false;
   const [showFallback, setShowFallback] = useState(false);
+
+  // Check if we're on chat page - use more precise matching to avoid false positives
+  const isOnChatPage = /^\/chat\/[^/]+$/.test(location.pathname);
+
+  // Fetch clone info only if signed in and NOT on chat page
+  // Include user ID in query key for proper cache isolation
+  const { data: cloneInfo } = useQuery({
+    queryKey: ["cloneInfo", user?.id],
+    queryFn: () => apiClient.clone.getInfo(),
+    enabled: isSignedIn && !isOnChatPage && !!user?.id, // Only fetch when needed and user ID is available
+    staleTime: 10 * 60 * 1000, // Cache for 10 minutes
+    retry: 1, // Retry once on failure
+    refetchOnWindowFocus: false, // Consistent with other queries
+  });
+
+  // Invalidate clone info cache when user signs out
+  useEffect(() => {
+    if (isLoaded && !isSignedIn) {
+      queryClient.removeQueries({ queryKey: ["cloneInfo"] });
+    }
+  }, [isLoaded, isSignedIn, queryClient]);
 
   useEffect(() => {
     if (isLoaded) {
@@ -83,7 +108,7 @@ const ClerkHeader = () => {
       <div className="container mx-auto flex justify-between items-center">
         <div className="flex items-center gap-4">
           <SignedIn>
-            {/* Always show both Training and Activity links */}
+            {/* Always show Training link */}
             <Link
               to={ROUTES.TRAINING}
               className={`text-sm font-medium transition-colors ${
@@ -94,16 +119,15 @@ const ClerkHeader = () => {
             >
               Training
             </Link>
-            <Link
-              to={ROUTES.ACTIVITY}
-              className={`text-sm font-medium transition-colors ${
-                location.pathname === ROUTES.ACTIVITY
-                  ? "text-primary"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              Activity
-            </Link>
+            {/* Show Chat link only when NOT on chat page and cloneId is available */}
+            {!isOnChatPage && cloneInfo?.cloneId && (
+              <Link
+                to={ROUTES.CHAT(cloneInfo.cloneId)}
+                className="text-sm font-medium transition-colors text-muted-foreground hover:text-foreground"
+              >
+                Chat
+              </Link>
+            )}
           </SignedIn>
         </div>
         <div className="flex items-center gap-3">

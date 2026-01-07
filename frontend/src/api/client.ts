@@ -314,6 +314,12 @@ export const apiClient = {
     status: (id: string) => apiClient.get<{ status: string; transcription?: string }>(`/api/clone/transcribe/${id}`),
   },
 
+  // Clone endpoints
+  clone: {
+    // Get current user's clone information
+    getInfo: () => apiClient.get<{ cloneId: string; tenantId: string; firstName?: string; lastName?: string; email?: string }>("/api/clone/info"),
+  },
+
   // Chat endpoints
   chat: {
     // Create or resume session for clone owner
