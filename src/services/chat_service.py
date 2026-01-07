@@ -349,11 +349,16 @@ class ChatService:
         if message.role != 'clone':
             raise ValueError("Can only submit feedback for clone messages")
 
+        # Check if this message already has feedback (to avoid compounding RL updates)
+        already_has_feedback = message.feedback_rating is not None
+
         # Update feedback fields on the message
         message.feedback_rating = content_rating
         message.feedback_source = feedback_source
         message.style_rating = style_rating
         message.feedback_text = feedback_text
+        # TODO: style_rating is stored for future Stage 3 style learning (see RL_OVERVIEW.md)
+        # Currently only content_rating affects chunk scores.
         self.db.commit()
         self.db.refresh(message)
 
@@ -361,6 +366,20 @@ class ChatService:
         weight = 2.0 if feedback_source == 'owner' else 1.0
 
         # Update chunk scores for RL-based learning
+        # IMPORTANT: Skip RL update if feedback already existed to prevent compounding.
+        # Re-submitting feedback updates the stored rating but doesn't re-update chunk scores.
+        # This prevents gaming (spam feedback) and accidental double-counting.
+        if already_has_feedback:
+            logger.info(
+                "Feedback updated (RL scores unchanged - feedback already existed)",
+                message_id=str(message_id),
+                content_rating=content_rating,
+                style_rating=style_rating,
+                feedback_source=feedback_source,
+                session_id=message.session_id,
+            )
+            return message
+
         # This uses the RAG context stored with the message to know which chunks to update
         if message.rag_context_json:
             chunks_updated = self.chunk_score_service.update_scores_from_feedback(
