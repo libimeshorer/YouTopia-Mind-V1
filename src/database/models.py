@@ -50,6 +50,7 @@ class Clone(Base):
     messages = relationship("Message", back_populates="clone", cascade="all, delete-orphan")
     sessions = relationship("Session", back_populates="clone", cascade="all, delete-orphan")
     data_sources = relationship("DataSource", back_populates="clone", cascade="all, delete-orphan")
+    chunk_scores = relationship("ChunkScore", back_populates="clone", cascade="all, delete-orphan")
 
 
 class Session(Base):
@@ -231,3 +232,31 @@ class DataSource(Base):
     # Relationships
     clone = relationship("Clone", back_populates="data_sources")
     integration = relationship("Integration", back_populates="data_sources")
+
+
+class ChunkScore(Base):
+    """ChunkScore model - stores learned quality scores for RAG chunks based on user feedback.
+
+    This is the core of the reinforcement learning system. When users give thumbs up/down
+    on clone responses, we track which chunks were retrieved and update their scores.
+    Chunks with positive scores get boosted in future retrievals.
+
+    See docs/RL_OVERVIEW.md for detailed documentation.
+    """
+    __tablename__ = "chunk_scores"
+
+    # Composite primary key: one score per chunk per clone
+    clone_id = Column(UUID(as_uuid=True), ForeignKey("clones.id", ondelete="CASCADE"), primary_key=True, index=True)
+    chunk_hash = Column(String(64), primary_key=True)  # SHA256 hash of chunk content
+
+    # Learned score: updated via exponential moving average
+    # Range: roughly -1.0 to +1.0 (can exceed slightly due to EMA)
+    # Positive = chunk correlates with good responses
+    # Negative = chunk correlates with bad responses
+    score = Column(Float, default=0.0, nullable=False)
+
+    # Number of times this chunk has received feedback (for analytics)
+    hit_count = Column(Integer, default=0, nullable=False)
+
+    # Relationship
+    clone = relationship("Clone", back_populates="chunk_scores")

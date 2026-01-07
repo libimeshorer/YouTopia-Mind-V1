@@ -1,4 +1,14 @@
-"""Chat service for managing conversations between clone owners and their AI clones"""
+"""Chat service for managing conversations between clone owners and their AI clones.
+
+This service handles the core chat functionality including:
+- Session management
+- Message creation and storage
+- RAG-based context retrieval
+- LLM response generation
+- Feedback collection and RL score updates
+
+See docs/RL_OVERVIEW.md for documentation on the reinforcement learning system.
+"""
 
 import time
 from datetime import datetime
@@ -11,13 +21,14 @@ from src.database.models import Session as ChatSession, Message, Clone
 from src.rag.retriever import RAGRetriever
 from src.rag.clone_vector_store import CloneVectorStore
 from src.llm.client import LLMClient
+from src.services.chunk_score_service import ChunkScoreService
 from src.utils.logging import get_logger
 
 logger = get_logger(__name__)
 
 
 class ChatService:
-    """Service for managing chat conversations"""
+    """Service for managing chat conversations with RL-based learning."""
 
     def __init__(
         self,
@@ -47,6 +58,9 @@ class ChatService:
 
         # Initialize LLM client
         self.llm_client = llm_client or LLMClient()
+
+        # Initialize chunk score service for RL-based retrieval boosting
+        self.chunk_score_service = ChunkScoreService(db)
 
     def get_or_create_owner_session(self) -> ChatSession:
         """
@@ -176,7 +190,15 @@ class ChatService:
             preview=user_message[:50]
         )
 
-        # Retrieve RAG context
+        # Load learned chunk scores for RL-based retrieval boosting
+        # TODO: Cache chunk scores in Redis to avoid loading all scores from DB on every message.
+        # Current approach loads ALL scores for clone on each message, which is O(n) where n = scored chunks.
+        # For clones with 10,000+ scored chunks, this becomes a performance bottleneck.
+        # Options: Redis cache with TTL, or session-level cache invalidated on feedback.
+        chunk_scores = self.chunk_score_service.get_score_map(self.clone_id)
+        self.rag_retriever.set_chunk_scores(chunk_scores)
+
+        # Retrieve RAG context (with RL boosting if scores exist)
         logger.info("Retrieving RAG context", query_preview=user_message[:50])
         rag_results = self.rag_retriever.retrieve(
             query=user_message,
@@ -274,8 +296,21 @@ class ChatService:
 
     def submit_feedback(self, message_id: UUID, rating: int) -> Message:
         """
-        Submit feedback for a clone message.
-        rating: -1 (thumbs down) or 1 (thumbs up)
+        Submit feedback for a clone message and update RL chunk scores.
+
+        This method:
+        1. Validates the feedback
+        2. Updates the message's feedback_rating
+        3. Updates chunk scores based on which chunks were used in this response
+
+        Args:
+            message_id: The clone message to rate
+            rating: -1 (thumbs down) or 1 (thumbs up)
+
+        Returns:
+            The updated message
+
+        See docs/RL_OVERVIEW.md for details on how feedback affects chunk scores.
         """
         if rating not in [-1, 1]:
             raise ValueError("Rating must be -1 (thumbs down) or 1 (thumbs up)")
@@ -291,17 +326,33 @@ class ChatService:
         if message.role != 'clone':
             raise ValueError(f"Can only submit feedback for clone messages")
 
-        # Update feedback
+        # Update feedback rating on the message
         message.feedback_rating = rating
         self.db.commit()
         self.db.refresh(message)
 
-        logger.info(
-            "Feedback submitted",
-            message_id=str(message_id),
-            rating=rating,
-            session_id=message.session_id,
-        )
+        # Update chunk scores for RL-based learning
+        # This uses the RAG context stored with the message to know which chunks to update
+        if message.rag_context_json:
+            chunks_updated = self.chunk_score_service.update_scores_from_feedback(
+                clone_id=self.clone_id,
+                rag_context=message.rag_context_json,
+                rating=rating
+            )
+            logger.info(
+                "Feedback submitted with RL update",
+                message_id=str(message_id),
+                rating=rating,
+                session_id=message.session_id,
+                chunks_updated=chunks_updated,
+            )
+        else:
+            logger.info(
+                "Feedback submitted (no RAG context for RL)",
+                message_id=str(message_id),
+                rating=rating,
+                session_id=message.session_id,
+            )
 
         return message
 

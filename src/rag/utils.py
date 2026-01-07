@@ -1,10 +1,58 @@
 """Utility functions for RAG operations"""
 
+import hashlib
 from typing import Dict
 from uuid import UUID
 from src.utils.logging import get_logger
 
 logger = get_logger(__name__)
+
+
+# =============================================================================
+# RL Scoring Constants (Single Source of Truth)
+# =============================================================================
+# These constants control the reinforcement learning system for chunk scoring.
+# See docs/RL_OVERVIEW.md for detailed documentation.
+
+# EMA decay factor: new_score = old_score * DECAY + rating * LEARNING_RATE
+# 0.9 means ~10 recent feedbacks have significant influence
+RL_DECAY = 0.9
+RL_LEARNING_RATE = 0.1  # = 1 - DECAY
+
+# Maximum boost/penalty to apply during retrieval
+# 0.3 means a perfect score (+1) adds 0.3 to similarity
+RL_MAX_BOOST = 0.3
+
+
+def hash_chunk_content(content: str) -> str:
+    """Generate SHA256 hash of chunk content for scoring/deduplication.
+
+    IMPORTANT: This is the single source of truth for chunk hashing.
+    Both score updates and score lookups MUST use this function to ensure
+    hash consistency. If hashes don't match, RL learning silently fails.
+
+    Args:
+        content: The text content of the chunk
+
+    Returns:
+        64-character hex string (SHA256 hash)
+    """
+    return hashlib.sha256(content.encode('utf-8')).hexdigest()
+
+
+def compute_score_boost(learned_score: float) -> float:
+    """Convert a learned chunk score to a retrieval boost value.
+
+    The boost is capped at ±RL_MAX_BOOST to prevent scores from
+    completely overriding semantic similarity.
+
+    Args:
+        learned_score: The learned chunk score (bounded to roughly -1 to +1 by EMA)
+
+    Returns:
+        Boost value to add to similarity score (±RL_MAX_BOOST max)
+    """
+    return max(-RL_MAX_BOOST, min(RL_MAX_BOOST, learned_score * RL_MAX_BOOST))
 
 
 def validate_metadata(
