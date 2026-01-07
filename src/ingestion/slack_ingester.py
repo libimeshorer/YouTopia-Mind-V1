@@ -26,8 +26,13 @@ class SlackIngester:
         self.bot_token = bot_token or settings.slack_bot_token
         self.client = WebClient(token=self.bot_token)
         self.s3_client = s3_client or S3Client()
-        # TODO: Consider using get_chunker() for semantic chunking when actively used
-        # Slack threads may benefit from keeping conversation context together
+        # TODO: Chunking improvements for Slack messages (when actively used):
+        # 1. Consider semantic chunking for long messages
+        # 2. Keep conversation threads together as context
+        # 3. Add contextual enrichment with channel/user context
+        # 4. Group related messages by time window or conversation
+        # For now, using simple recursive chunking.
+        # See: src/ingestion/context_enricher.py for contextual enrichment pattern.
         self.chunker = TextChunker()
     
     def fetch_channel_messages(
