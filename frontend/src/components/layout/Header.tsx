@@ -1,11 +1,11 @@
-import { SignedIn, SignedOut, UserButton, useAuth } from "@clerk/clerk-react";
+import { SignedIn, SignedOut, UserButton, useAuth, useUser } from "@clerk/clerk-react";
 import { Button } from "@/components/ui/button";
 import { LogIn, UserPlus } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { ROUTES } from "@/constants/routes";
 import { clerkConfig } from "@/lib/clerk";
 import { useEffect, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/api/client";
 
 // Sign In button component (reusable)
@@ -38,21 +38,33 @@ const SignUpButton = () => (
 // Header with Clerk integration (only used when ClerkProvider is present)
 const ClerkHeader = () => {
   const auth = useAuth();
+  const { user } = useUser();
   const location = useLocation();
+  const queryClient = useQueryClient();
   const isLoaded = auth?.isLoaded ?? false;
   const isSignedIn = auth?.isSignedIn ?? false;
   const [showFallback, setShowFallback] = useState(false);
 
-  // Check if we're on chat page
-  const isOnChatPage = location.pathname.startsWith("/chat/");
+  // Check if we're on chat page - use more precise matching to avoid false positives
+  const isOnChatPage = /^\/chat\/[^/]+$/.test(location.pathname);
 
   // Fetch clone info only if signed in and NOT on chat page
+  // Include user ID in query key for proper cache isolation
   const { data: cloneInfo } = useQuery({
-    queryKey: ["cloneInfo"],
+    queryKey: ["cloneInfo", user?.id],
     queryFn: () => apiClient.clone.getInfo(),
-    enabled: isSignedIn && !isOnChatPage, // Only fetch when needed
+    enabled: isSignedIn && !isOnChatPage && !!user?.id, // Only fetch when needed and user ID is available
     staleTime: 10 * 60 * 1000, // Cache for 10 minutes
+    retry: 1, // Retry once on failure
+    refetchOnWindowFocus: false, // Consistent with other queries
   });
+
+  // Invalidate clone info cache when user signs out
+  useEffect(() => {
+    if (isLoaded && !isSignedIn) {
+      queryClient.removeQueries({ queryKey: ["cloneInfo"] });
+    }
+  }, [isLoaded, isSignedIn, queryClient]);
 
   useEffect(() => {
     if (isLoaded) {
