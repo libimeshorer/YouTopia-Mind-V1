@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session
 from src.database.db import engine, SessionLocal
 from src.database.models import (
     Tenant, Clone, Session as ChatSession, Message, Document,
-    Insight, TrainingStatus, Integration, DataSource
+    Insight, TrainingStatus, Integration, DataSource, ChunkScore
 )
 
 
@@ -169,6 +169,7 @@ def check_all_tables(limit: int = 10):
         ('training_status', TrainingStatus),
         ('integrations', Integration),
         ('data_sources', DataSource),
+        ('chunk_scores', ChunkScore),
     ]
 
     db = SessionLocal()
@@ -204,6 +205,7 @@ def check_specific_table(table_name: str, limit: int = 10):
         'training_status': TrainingStatus,
         'integrations': Integration,
         'data_sources': DataSource,
+        'chunk_scores': ChunkScore,
     }
 
     model = table_map.get(table_name.lower())
