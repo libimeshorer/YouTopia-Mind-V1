@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import { Mic, Save, Edit, Trash2, Play, Search, Loader2 } from "lucide-react";
 import { apiClient } from "@/api/client";
 import { Insight } from "@/types";
@@ -140,6 +141,9 @@ export const InsightsManager = () => {
           <CardTitle className="flex items-center gap-2">
             <Mic className="w-5 h-5" />
             Record Voice Insight
+            <Badge className="bg-gradient-primary text-primary-foreground border-none rounded-md px-2.5 py-0.5 text-xs font-semibold">
+              Premium
+            </Badge>
           </CardTitle>
         </CardHeader>
         <CardContent>
