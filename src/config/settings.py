@@ -53,6 +53,10 @@ class Settings(BaseSettings):
     top_k_retrieval: int = Field(5, env="TOP_K_RETRIEVAL")
     chunk_size: int = Field(1000, env="CHUNK_SIZE")
     chunk_overlap: int = Field(200, env="CHUNK_OVERLAP")
+
+    # Chunking Strategy Settings
+    chunking_strategy: str = Field("semantic", env="CHUNKING_STRATEGY")  # "semantic" or "recursive"
+    semantic_similarity_threshold: float = Field(0.5, env="SEMANTIC_SIMILARITY_THRESHOLD")
     
     class Config:
         env_file = ".env"

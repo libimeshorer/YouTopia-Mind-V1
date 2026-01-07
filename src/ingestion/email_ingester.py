@@ -14,9 +14,16 @@ logger = get_logger(__name__)
 
 class EmailIngester:
     """Ingester for email messages"""
-    
+
     def __init__(self, s3_client: Optional[S3Client] = None):
         self.s3_client = s3_client or S3Client()
+        # TODO: Chunking improvements for emails (when actively used):
+        # 1. Consider semantic chunking for long email bodies (use get_chunker())
+        # 2. Keep email thread/reply chains together as context
+        # 3. Add contextual enrichment with email metadata (subject, sender, recipients)
+        # 4. Special handling for forwarded emails and attachments
+        # For now, using simple recursive chunking.
+        # See: src/ingestion/context_enricher.py for contextual enrichment pattern.
         self.chunker = TextChunker()
     
     def decode_email_header(self, header_value: str) -> str:

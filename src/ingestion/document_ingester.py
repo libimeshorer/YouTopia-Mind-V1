@@ -5,7 +5,7 @@ from pathlib import Path
 
 from src.utils.logging import get_logger
 from src.utils.aws import S3Client
-from src.ingestion.chunking import TextChunker
+from src.ingestion.chunking import get_chunker
 
 logger = get_logger(__name__)
 
@@ -15,7 +15,7 @@ class DocumentIngester:
     
     def __init__(self, s3_client: Optional[S3Client] = None):
         self.s3_client = s3_client or S3Client()
-        self.chunker = TextChunker()
+        self.chunker = get_chunker()
     
     def extract_text_from_pdf(self, file_path: str) -> str:
         """Extract text from PDF file"""
