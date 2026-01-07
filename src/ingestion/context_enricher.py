@@ -8,12 +8,22 @@ This module is designed to run during document ingestion to enhance
 each chunk with context that helps it be more discoverable during search.
 """
 
-from typing import List, Dict
-from openai import OpenAI
+import asyncio
+import time
+from typing import List, Dict, Tuple, Optional
+from openai import OpenAI, AsyncOpenAI
 from src.config.settings import settings
 from src.utils.logging import get_logger
 
 logger = get_logger(__name__)
+
+# Response validation constants
+MIN_CONTEXT_LENGTH = 10
+MAX_CONTEXT_LENGTH = 300
+
+# Retry configuration
+MAX_RETRIES = 3
+RETRY_BASE_DELAY = 1.0  # seconds
 
 CONTEXT_PROMPT = """<document>
 {document}
@@ -46,6 +56,7 @@ class ContextEnricher:
     def __init__(self, model: str = None):
         self.model = model or settings.context_enrichment_model
         self.client = OpenAI(api_key=settings.openai_api_key)
+        self.async_client = AsyncOpenAI(api_key=settings.openai_api_key)
         self.max_document_chars = settings.max_document_chars_for_context
         self.max_chunks = settings.max_chunks_per_document_for_context
 
@@ -87,47 +98,206 @@ class ContextEnricher:
 
         return True
 
-    def enrich_chunk(self, chunk_text: str, full_document: str) -> str:
+    def _validate_context(self, context: Optional[str]) -> Tuple[bool, str]:
         """
-        Add context prefix to a single chunk.
+        Validate LLM-generated context.
+
+        Args:
+            context: The generated context string
+
+        Returns:
+            Tuple of (is_valid, cleaned_context_or_reason)
+        """
+        if not context:
+            return False, "Empty response"
+
+        # Strip common prefixes the LLM might add
+        cleaned = context.strip()
+        if cleaned.lower().startswith("context:"):
+            cleaned = cleaned[8:].strip()
+
+        # Check length bounds
+        if len(cleaned) < MIN_CONTEXT_LENGTH:
+            return False, f"Too short ({len(cleaned)} chars)"
+
+        if len(cleaned) > MAX_CONTEXT_LENGTH:
+            # Truncate overly long contexts
+            cleaned = cleaned[:MAX_CONTEXT_LENGTH].rsplit(" ", 1)[0] + "..."
+            logger.warning("Context truncated", original_length=len(context))
+
+        return True, cleaned
+
+    def _enrich_chunk_sync(self, chunk_text: str, full_document: str) -> Tuple[str, bool]:
+        """
+        Add context prefix to a single chunk (synchronous with retry).
 
         Args:
             chunk_text: The chunk to enrich
             full_document: The complete document for context
 
         Returns:
-            Enriched chunk with context prefix, or original chunk on failure
+            Tuple of (enriched_text, success_flag)
         """
-        try:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {
-                        "role": "user",
-                        "content": CONTEXT_PROMPT.format(
-                            document=full_document,
-                            chunk=chunk_text,
-                        ),
-                    }
-                ],
-                max_tokens=100,  # One sentence shouldn't need more
-                temperature=0,
-            )
-            context = response.choices[0].message.content.strip()
+        last_error = None
 
-            # Log token usage for cost monitoring
-            if response.usage:
-                logger.debug(
-                    "Context enrichment tokens",
-                    prompt_tokens=response.usage.prompt_tokens,
-                    completion_tokens=response.usage.completion_tokens,
+        for attempt in range(MAX_RETRIES):
+            try:
+                response = self.client.chat.completions.create(
+                    model=self.model,
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": CONTEXT_PROMPT.format(
+                                document=full_document,
+                                chunk=chunk_text,
+                            ),
+                        }
+                    ],
+                    max_tokens=100,
+                    temperature=0,
                 )
+                context = response.choices[0].message.content
 
-            return f"{context}\n\n{chunk_text}"
+                # Log token usage for cost monitoring
+                if response.usage:
+                    logger.debug(
+                        "Context enrichment tokens",
+                        prompt_tokens=response.usage.prompt_tokens,
+                        completion_tokens=response.usage.completion_tokens,
+                    )
 
-        except Exception as e:
-            logger.error("Error enriching chunk with context", error=str(e))
-            return chunk_text  # Return original on failure
+                # Validate response
+                is_valid, result = self._validate_context(context)
+                if not is_valid:
+                    logger.warning("Invalid context response", reason=result, attempt=attempt + 1)
+                    last_error = result
+                    continue
+
+                return f"{result}\n\n{chunk_text}", True
+
+            except Exception as e:
+                last_error = str(e)
+                if attempt < MAX_RETRIES - 1:
+                    delay = RETRY_BASE_DELAY * (2 ** attempt)
+                    logger.warning(
+                        "Context enrichment failed, retrying",
+                        error=last_error,
+                        attempt=attempt + 1,
+                        retry_delay=delay,
+                    )
+                    time.sleep(delay)
+
+        logger.error("Context enrichment failed after retries", error=last_error)
+        return chunk_text, False
+
+    async def _enrich_chunk_async(self, chunk_text: str, full_document: str) -> Tuple[str, bool]:
+        """
+        Add context prefix to a single chunk (async with retry).
+
+        Args:
+            chunk_text: The chunk to enrich
+            full_document: The complete document for context
+
+        Returns:
+            Tuple of (enriched_text, success_flag)
+        """
+        last_error = None
+
+        for attempt in range(MAX_RETRIES):
+            try:
+                response = await self.async_client.chat.completions.create(
+                    model=self.model,
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": CONTEXT_PROMPT.format(
+                                document=full_document,
+                                chunk=chunk_text,
+                            ),
+                        }
+                    ],
+                    max_tokens=100,
+                    temperature=0,
+                )
+                context = response.choices[0].message.content
+
+                # Log token usage for cost monitoring
+                if response.usage:
+                    logger.debug(
+                        "Context enrichment tokens",
+                        prompt_tokens=response.usage.prompt_tokens,
+                        completion_tokens=response.usage.completion_tokens,
+                    )
+
+                # Validate response
+                is_valid, result = self._validate_context(context)
+                if not is_valid:
+                    logger.warning("Invalid context response", reason=result, attempt=attempt + 1)
+                    last_error = result
+                    continue
+
+                return f"{result}\n\n{chunk_text}", True
+
+            except Exception as e:
+                last_error = str(e)
+                if attempt < MAX_RETRIES - 1:
+                    delay = RETRY_BASE_DELAY * (2 ** attempt)
+                    logger.warning(
+                        "Context enrichment failed, retrying",
+                        error=last_error,
+                        attempt=attempt + 1,
+                        retry_delay=delay,
+                    )
+                    await asyncio.sleep(delay)
+
+        logger.error("Context enrichment failed after retries", error=last_error)
+        return chunk_text, False
+
+    async def _enrich_chunks_parallel(
+        self,
+        chunks: List[Dict],
+        full_document: str,
+    ) -> List[Dict]:
+        """
+        Enrich chunks in parallel using async API calls.
+
+        Args:
+            chunks: List of chunk dicts
+            full_document: Complete document text
+
+        Returns:
+            List of enriched chunk dicts
+        """
+        # Create tasks for all chunks
+        tasks = [
+            self._enrich_chunk_async(chunk["text"], full_document)
+            for chunk in chunks
+        ]
+
+        # Run all in parallel
+        results = await asyncio.gather(*tasks)
+
+        # Build enriched chunks with accurate metadata
+        enriched = []
+        success_count = 0
+        for chunk, (enriched_text, success) in zip(chunks, results):
+            if success:
+                success_count += 1
+            enriched.append({
+                "text": enriched_text,
+                "metadata": {
+                    **chunk["metadata"],
+                    "context_enriched": success,
+                },
+            })
+
+        logger.info(
+            "Parallel enrichment complete",
+            total=len(chunks),
+            successful=success_count,
+            failed=len(chunks) - success_count,
+        )
+        return enriched
 
     def enrich_chunks(
         self,
@@ -135,7 +305,7 @@ class ContextEnricher:
         full_document: str,
     ) -> List[Dict]:
         """
-        Enrich multiple chunks with context.
+        Enrich multiple chunks with context (runs async internally).
 
         Args:
             chunks: List of chunk dicts with 'text' and 'metadata' keys
@@ -154,17 +324,56 @@ class ContextEnricher:
                 chunk["metadata"]["context_enriched"] = False
             return chunks
 
-        logger.info(f"Enriching {len(chunks)} chunks with context")
+        logger.info(f"Enriching {len(chunks)} chunks with context (parallel)")
 
+        # Run async enrichment
+        try:
+            # Check if we're already in an event loop
+            try:
+                loop = asyncio.get_running_loop()
+                # We're in an async context, need to use a different approach
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(
+                        asyncio.run,
+                        self._enrich_chunks_parallel(chunks, full_document)
+                    )
+                    return future.result()
+            except RuntimeError:
+                # No event loop running, safe to use asyncio.run
+                return asyncio.run(self._enrich_chunks_parallel(chunks, full_document))
+        except Exception as e:
+            logger.error("Parallel enrichment failed, falling back to sequential", error=str(e))
+            return self._enrich_chunks_sequential(chunks, full_document)
+
+    def _enrich_chunks_sequential(
+        self,
+        chunks: List[Dict],
+        full_document: str,
+    ) -> List[Dict]:
+        """
+        Fallback: Enrich chunks sequentially.
+
+        Args:
+            chunks: List of chunk dicts
+            full_document: Complete document text
+
+        Returns:
+            List of enriched chunk dicts
+        """
         enriched = []
+        success_count = 0
+
         for i, chunk in enumerate(chunks):
-            enriched_text = self.enrich_chunk(chunk["text"], full_document)
+            enriched_text, success = self._enrich_chunk_sync(chunk["text"], full_document)
+            if success:
+                success_count += 1
 
             enriched.append({
                 "text": enriched_text,
                 "metadata": {
                     **chunk["metadata"],
-                    "context_enriched": True,
+                    "context_enriched": success,
                 },
             })
 
@@ -172,5 +381,10 @@ class ContextEnricher:
             if (i + 1) % 10 == 0:
                 logger.info(f"Enriched {i + 1}/{len(chunks)} chunks")
 
-        logger.info("Context enrichment complete", chunk_count=len(enriched))
+        logger.info(
+            "Sequential enrichment complete",
+            total=len(chunks),
+            successful=success_count,
+            failed=len(chunks) - success_count,
+        )
         return enriched
