@@ -17,6 +17,8 @@ class EmailIngester:
     
     def __init__(self, s3_client: Optional[S3Client] = None):
         self.s3_client = s3_client or S3Client()
+        # TODO: Consider using get_chunker() for semantic chunking when actively used
+        # Email threads may benefit from keeping conversation context together
         self.chunker = TextChunker()
     
     def decode_email_header(self, header_value: str) -> str:

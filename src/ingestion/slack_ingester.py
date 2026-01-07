@@ -26,6 +26,8 @@ class SlackIngester:
         self.bot_token = bot_token or settings.slack_bot_token
         self.client = WebClient(token=self.bot_token)
         self.s3_client = s3_client or S3Client()
+        # TODO: Consider using get_chunker() for semantic chunking when actively used
+        # Slack threads may benefit from keeping conversation context together
         self.chunker = TextChunker()
     
     def fetch_channel_messages(

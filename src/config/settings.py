@@ -53,7 +53,14 @@ class Settings(BaseSettings):
     top_k_retrieval: int = Field(5, env="TOP_K_RETRIEVAL")
     chunk_size: int = Field(1000, env="CHUNK_SIZE")
     chunk_overlap: int = Field(200, env="CHUNK_OVERLAP")
-    
+
+    # Semantic Chunking Settings
+    chunking_strategy: str = Field("recursive", env="CHUNKING_STRATEGY")  # "recursive" or "semantic"
+    semantic_similarity_threshold: float = Field(0.5, env="SEMANTIC_SIMILARITY_THRESHOLD")
+    semantic_embedding_model: str = Field("text-embedding-3-small", env="SEMANTIC_EMBEDDING_MODEL")
+    semantic_min_chunk_size: int = Field(100, env="SEMANTIC_MIN_CHUNK_SIZE")
+    semantic_max_chunk_size: int = Field(1500, env="SEMANTIC_MAX_CHUNK_SIZE")
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
