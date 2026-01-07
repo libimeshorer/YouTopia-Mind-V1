@@ -6,10 +6,10 @@ This module handles context retrieval for clone responses. It supports:
 - Re-ranking based on learned chunk quality scores
 """
 
-import hashlib
 from typing import List, Dict, Optional
 from src.rag.vector_store import VectorStore
 from src.rag.clone_vector_store import CloneVectorStore
+from src.rag.utils import hash_chunk_content, compute_score_boost
 from src.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -24,10 +24,9 @@ class RAGRetriever:
     3. Re-rank and return top_k chunks
 
     This enables the system to learn from feedback and improve retrieval over time.
-    """
 
-    # Maximum boost from learned scores (prevents overriding semantic similarity)
-    MAX_BOOST = 0.3
+    RL constants are defined in src/rag/utils.py (single source of truth).
+    """
 
     def __init__(
         self,
@@ -56,17 +55,13 @@ class RAGRetriever:
         if self.chunk_scores:
             logger.debug("Chunk scores set for retrieval", scores_count=len(self.chunk_scores))
 
-    def _hash_chunk(self, content: str) -> str:
-        """Generate SHA256 hash of chunk content."""
-        return hashlib.sha256(content.encode('utf-8')).hexdigest()
-
     def _apply_score_boosts(self, results: List[Dict]) -> List[Dict]:
         """Apply learned score boosts to retrieval results.
 
         For each result:
-        1. Compute chunk hash
+        1. Compute chunk hash (using shared hash_chunk_content function)
         2. Look up learned score
-        3. Add boost to base similarity score
+        3. Add boost to base similarity score (using shared compute_score_boost)
         4. Track boost for logging/debugging
 
         Args:
@@ -82,12 +77,12 @@ class RAGRetriever:
                 result["boost_applied"] = 0.0
                 continue
 
-            chunk_hash = self._hash_chunk(text)
+            chunk_hash = hash_chunk_content(text)
             base_score = 1.0 - result.get("distance", 0.5)  # Convert distance to similarity
 
-            # Look up learned score and compute boost
+            # Look up learned score and compute boost using shared function
             learned_score = self.chunk_scores.get(chunk_hash, 0.0)
-            boost = max(-self.MAX_BOOST, min(self.MAX_BOOST, learned_score * self.MAX_BOOST))
+            boost = compute_score_boost(learned_score)
 
             result["adjusted_score"] = base_score + boost
             result["boost_applied"] = boost

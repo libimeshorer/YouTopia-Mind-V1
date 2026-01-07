@@ -191,6 +191,10 @@ class ChatService:
         )
 
         # Load learned chunk scores for RL-based retrieval boosting
+        # TODO: Cache chunk scores in Redis to avoid loading all scores from DB on every message.
+        # Current approach loads ALL scores for clone on each message, which is O(n) where n = scored chunks.
+        # For clones with 10,000+ scored chunks, this becomes a performance bottleneck.
+        # Options: Redis cache with TTL, or session-level cache invalidated on feedback.
         chunk_scores = self.chunk_score_service.get_score_map(self.clone_id)
         self.rag_retriever.set_chunk_scores(chunk_scores)
 
