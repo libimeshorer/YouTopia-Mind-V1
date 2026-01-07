@@ -4,6 +4,9 @@ import { Mic, Square, Loader2 } from "lucide-react";
 import { apiClient } from "@/api/client";
 import { useToast } from "@/hooks/use-toast";
 
+// TODO: When ENABLE_VOICE_RECORDER is changed to true, add a proper speech-to-text API integration for transcribing voice recordings
+const ENABLE_VOICE_RECORDER = false;
+
 interface VoiceRecorderProps {
   onTranscriptionComplete?: (transcription: string) => void;
   onSave?: (transcription: string) => void;
@@ -28,6 +31,10 @@ export const VoiceRecorder = ({ onTranscriptionComplete, onSave }: VoiceRecorder
   }, []);
 
   const startRecording = async () => {
+    if (!ENABLE_VOICE_RECORDER) {
+      return;
+    }
+    
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mediaRecorder = new MediaRecorder(stream);
@@ -116,6 +123,7 @@ export const VoiceRecorder = ({ onTranscriptionComplete, onSave }: VoiceRecorder
             onClick={startRecording}
             className="bg-gradient-primary hover:shadow-glow"
             size="lg"
+            disabled={!ENABLE_VOICE_RECORDER}
           >
             <Mic className="w-5 h-5 mr-2" />
             Start Recording
