@@ -10,44 +10,44 @@ from botocore.exceptions import ClientError
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables and AWS Secrets Manager"""
-    
+
     # Slack Configuration (optional - only needed for Slack bot)
     slack_bot_token: Optional[str] = Field(None, env="SLACK_BOT_TOKEN")
     slack_signing_secret: Optional[str] = Field(None, env="SLACK_SIGNING_SECRET")
     slack_app_token: Optional[str] = Field(None, env="SLACK_APP_TOKEN")
-    
+
     # OpenAI Configuration
     openai_api_key: str = Field(..., env="OPENAI_API_KEY")
     openai_model: str = Field("gpt-4-turbo-preview", env="OPENAI_MODEL")
     openai_embedding_model: str = Field("text-embedding-3-large", env="OPENAI_EMBEDDING_MODEL")
-    
+
     # AWS Configuration (optional - only needed for S3 operations)
     aws_region: str = Field("us-east-1", env="AWS_REGION")
     aws_access_key_id: Optional[str] = Field(None, env="AWS_ACCESS_KEY_ID")
     aws_secret_access_key: Optional[str] = Field(None, env="AWS_SECRET_ACCESS_KEY")
     s3_bucket_name: Optional[str] = Field(None, env="S3_BUCKET_NAME")
-    
+
     # Database (optional - only needed for database operations)
     database_url: Optional[str] = Field(None, env="DATABASE_URL")
-    
+
     # Clerk Authentication (optional - only needed for API server)
     clerk_secret_key: Optional[str] = Field(None, env="CLERK_SECRET_KEY")
-    
+
     # Pinecone Vector Database
     pinecone_api_key: str = Field(..., env="PINECONE_API_KEY")
     pinecone_index_name: str = Field("youtopia-dev", env="PINECONE_INDEX_NAME")
-    
+
     # Vector Database (legacy - kept for backward compatibility)
     chroma_db_path: str = Field("./data/chroma_db", env="CHROMA_DB_PATH")
     chroma_persist_directory: str = Field("./data/chroma_db", env="CHROMA_PERSIST_DIRECTORY")
-    
+
     # Application Settings
     log_level: str = Field("INFO", env="LOG_LEVEL")
     environment: str = Field("development", env="ENVIRONMENT")
-    
+
     # Personality Profile
     personality_profile_path: str = Field("./data/personality_profile.json", env="PERSONALITY_PROFILE_PATH")
-    
+
     # RAG Settings
     max_context_tokens: int = Field(4000, env="MAX_CONTEXT_TOKENS")
     top_k_retrieval: int = Field(5, env="TOP_K_RETRIEVAL")
@@ -60,6 +60,12 @@ class Settings(BaseSettings):
     semantic_embedding_model: str = Field("text-embedding-3-small", env="SEMANTIC_EMBEDDING_MODEL")
     semantic_min_chunk_size: int = Field(100, env="SEMANTIC_MIN_CHUNK_SIZE")
     semantic_max_chunk_size: int = Field(1500, env="SEMANTIC_MAX_CHUNK_SIZE")
+
+    # Contextual Retrieval Settings
+    enable_context_enrichment: bool = Field(True, env="ENABLE_CONTEXT_ENRICHMENT")
+    context_enrichment_model: str = Field("gpt-4o-mini", env="CONTEXT_ENRICHMENT_MODEL")
+    max_document_chars_for_context: int = Field(15000, env="MAX_DOCUMENT_CHARS_FOR_CONTEXT")
+    max_chunks_per_document_for_context: int = Field(500, env="MAX_CHUNKS_PER_DOCUMENT_FOR_CONTEXT")
 
     class Config:
         env_file = ".env"
@@ -85,17 +91,17 @@ def load_settings() -> Settings:
     """Load settings from environment variables, with optional AWS Secrets Manager fallback"""
     try:
         from dotenv import load_dotenv
-        
+
         # Determine which environment file to load
         # Check ENVIRONMENT variable first (from system env or already loaded)
         env_from_system = os.getenv("ENVIRONMENT", "").lower().strip()
-        
+
         # CRITICAL SAFETY: Default to development if not specified (fail-safe)
         # Only use production if explicitly set to "production" or "prod"
         if not env_from_system:
             env_from_system = "development"
             os.environ["ENVIRONMENT"] = "development"
-        
+
         # Normalize environment values
         if env_from_system in ("dev", "development"):
             env_from_system = "development"
@@ -107,14 +113,14 @@ def load_settings() -> Settings:
             # Unknown value - default to development for safety
             env_from_system = "development"
             os.environ["ENVIRONMENT"] = "development"
-        
+
         # Priority order:
         # 1. .env.local (if exists) - highest priority for local overrides
         # 2. .dev.env or .prod.env based on ENVIRONMENT variable
         # 3. .env (fallback)
-        
+
         env_file_loaded = False
-        
+
         # First, try .env.local if it exists (for local overrides)
         if os.path.exists(".env.local"):
             load_dotenv(".env.local", override=False)
@@ -131,7 +137,7 @@ def load_settings() -> Settings:
             elif not env_from_system:
                 env_from_system = "development"
                 os.environ["ENVIRONMENT"] = "development"
-        
+
         # Then load environment-specific file based on ENVIRONMENT variable
         # SAFETY: Default to development if not specified
         if env_from_system == "development":
@@ -142,11 +148,11 @@ def load_settings() -> Settings:
             if os.path.exists(".prod.env"):
                 load_dotenv(".prod.env", override=False)
                 env_file_loaded = True
-        
+
         # Fallback to .env if no environment-specific file was loaded
         if not env_file_loaded and os.path.exists(".env"):
             load_dotenv(".env", override=False)
-        
+
         # Handle S3_BUCKET_NAME based on environment
         # If S3_BUCKET_NAME is not set, try S3_BUCKET_NAME_DEV or S3_BUCKET_NAME_PROD
         if not os.getenv("S3_BUCKET_NAME"):
@@ -162,11 +168,11 @@ def load_settings() -> Settings:
                 # Fallback to DEV if PROD not found (safety fallback)
                 elif os.getenv("S3_BUCKET_NAME_DEV"):
                     os.environ["S3_BUCKET_NAME"] = os.getenv("S3_BUCKET_NAME_DEV")
-        
+
     except ImportError:
         # python-dotenv not available, rely on pydantic-settings default behavior
         pass
-    
+
     # Try to load from environment
     try:
         settings = Settings()
@@ -186,5 +192,3 @@ def load_settings() -> Settings:
 
 # Global settings instance
 settings = load_settings()
-
-

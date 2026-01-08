@@ -1,6 +1,6 @@
 """Documents API router"""
 
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Query
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Query, BackgroundTasks
 from sqlalchemy.orm import Session
 from typing import List, Optional
 import uuid
@@ -8,8 +8,8 @@ import hashlib
 from datetime import datetime
 from src.api.dependencies import get_clone_context, CloneContext, get_db
 from src.database.models import Document
+from src.database.db import get_db_session
 from src.ingestion.document_ingester import DocumentIngester
-from src.ingestion.pipeline import IngestionPipeline
 from src.services.clone_data_access import CloneDataAccessService
 from src.utils.aws import S3Client
 from src.utils.logging import get_logger
@@ -34,6 +34,82 @@ class DocumentResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+def process_document_background(
+    doc_id: uuid.UUID,
+    file_bytes: bytes,
+    filename: str,
+    tenant_id: uuid.UUID,
+    clone_id: uuid.UUID,
+):
+    """
+    Background task to process document after upload.
+
+    This runs asynchronously so the upload response returns immediately.
+    The frontend can poll /documents/{id}/status to check progress.
+    """
+    db = get_db_session()
+    try:
+        doc = db.query(Document).filter(Document.id == doc_id).first()
+        if not doc:
+            logger.error("Document not found in background task", document_id=str(doc_id))
+            return
+
+        # Update status to processing
+        doc.status = "processing"
+        db.commit()
+
+        # Set up ingestion
+        s3_client = S3Client()
+        document_ingester = DocumentIngester(s3_client=s3_client)
+        data_access = CloneDataAccessService(clone_id, tenant_id, db)
+        vector_store = data_access.get_vector_store()
+
+        # Process document
+        chunks = document_ingester.ingest_from_bytes(
+            file_bytes,
+            filename,
+            source_name=filename,
+            additional_metadata={
+                "tenant_id": str(tenant_id),
+                "clone_id": str(clone_id),
+                "document_id": str(doc_id)
+            }
+        )
+
+        # Store chunks in vector store
+        if chunks:
+            texts = [chunk["text"] for chunk in chunks]
+            metadatas = [chunk["metadata"] for chunk in chunks]
+            vector_store.add_texts(texts, metadatas=metadatas)
+
+            doc.status = "complete"
+            doc.chunks_count = len(chunks)
+        else:
+            doc.status = "error"
+            doc.error_message = "No text extracted from document"
+
+        db.commit()
+        logger.info(
+            "Document processing complete",
+            document_id=str(doc_id),
+            status=doc.status,
+            chunks=doc.chunks_count,
+        )
+
+    except Exception as e:
+        logger.error("Error processing document in background", error=str(e), document_id=str(doc_id))
+        try:
+            doc = db.query(Document).filter(Document.id == doc_id).first()
+            if doc:
+                doc.status = "error"
+                doc.error_message = str(e)[:500]  # Truncate long errors
+                db.commit()
+        except Exception:
+            pass
+    finally:
+        db.close()
 
 
 @router.get("/documents", response_model=List[DocumentResponse])
@@ -61,25 +137,19 @@ async def list_documents(
 
 @router.post("/documents", response_model=List[DocumentResponse], status_code=status.HTTP_201_CREATED)
 async def upload_documents(
+    background_tasks: BackgroundTasks,
     files: List[UploadFile] = File(...),
     clone_ctx: CloneContext = Depends(get_clone_context),
     db: Session = Depends(get_db)
 ):
-    """Upload one or more documents"""
+    """Upload one or more documents (processing happens in background)"""
     if not files:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="No files provided"
         )
-    
-    data_access = CloneDataAccessService(clone_ctx.clone_id, clone_ctx.tenant_id, db)
-    vector_store = data_access.get_vector_store()
-    
+
     s3_client = S3Client()
-    document_ingester = DocumentIngester(s3_client=s3_client)
-    pipeline = IngestionPipeline(document_ingester=document_ingester)
-    pipeline.vector_store = vector_store  # Use clone-scoped vector store
-    
     uploaded_documents = []
     
     for file in files:
@@ -155,46 +225,16 @@ async def upload_documents(
                     detail="Failed to upload file to storage"
                 )
             
-            # Process document asynchronously (in background)
-            try:
-                # Update status to processing
-                doc.status = "processing"
-                db.commit()
-                
-                # Process document with clone_id and tenant_id in metadata
-                chunks = document_ingester.ingest_from_bytes(
-                    file_bytes,
-                    file.filename,
-                    source_name=file.filename,
-                    additional_metadata={
-                        "tenant_id": str(clone_ctx.tenant_id),
-                        "clone_id": str(clone_ctx.clone_id),
-                        "document_id": str(doc.id)
-                    }
-                )
-                
-                # Store chunks in clone-scoped vector store
-                if chunks:
-                    texts = [chunk["text"] for chunk in chunks]
-                    metadatas = [chunk["metadata"] for chunk in chunks]
-                    vector_store.add_texts(texts, metadatas=metadatas)
-                    
-                    # Update document
-                    doc.status = "complete"
-                    doc.chunks_count = len(chunks)
-                else:
-                    doc.status = "error"
-                    doc.error_message = "No text extracted from document"
-                
-                db.commit()
-                db.refresh(doc)
-                
-            except Exception as e:
-                logger.error("Error processing document", error=str(e), document_id=str(doc.id))
-                doc.status = "error"
-                doc.error_message = str(e)
-                db.commit()
-            
+            # Schedule background processing (returns immediately)
+            background_tasks.add_task(
+                process_document_background,
+                doc_id=doc.id,
+                file_bytes=file_bytes,
+                filename=file.filename,
+                tenant_id=clone_ctx.tenant_id,
+                clone_id=clone_ctx.clone_id,
+            )
+
             uploaded_documents.append(
                 DocumentResponse(
                     id=str(doc.id),
