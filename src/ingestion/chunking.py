@@ -1,6 +1,7 @@
 """Text chunking strategies for document ingestion"""
 
 import re
+import time
 import numpy as np
 from typing import List, Dict, Optional, Union
 from langchain.text_splitter import RecursiveCharacterTextSplitter
@@ -9,6 +10,10 @@ from src.config.settings import settings
 from src.utils.logging import get_logger
 
 logger = get_logger(__name__)
+
+# Retry configuration for embeddings API
+MAX_RETRIES = 3
+RETRY_BASE_DELAY = 1.0  # seconds
 
 
 class TextChunker:
@@ -103,7 +108,7 @@ class SemanticTextChunker:
         self.embedding_model = embedding_model or settings.semantic_embedding_model
         self.client = OpenAI(api_key=settings.openai_api_key)
 
-        # Fallback chunker for edge cases
+        # Fallback chunker for edge cases (including oversized sentences)
         self._fallback_chunker = TextChunker(
             chunk_size=self.max_chunk_size,
             chunk_overlap=int(self.max_chunk_size * 0.1),
@@ -123,18 +128,42 @@ class SemanticTextChunker:
 
         return cleaned
 
-    def _get_embeddings(self, texts: List[str]) -> np.ndarray:
-        """Get embeddings for a list of texts using OpenAI API."""
-        try:
-            response = self.client.embeddings.create(
-                model=self.embedding_model,
-                input=texts,
-            )
-            embeddings = [item.embedding for item in response.data]
-            return np.array(embeddings)
-        except Exception as e:
-            logger.error("Error getting embeddings", error=str(e))
-            raise
+    def _get_embeddings_with_retry(self, texts: List[str]) -> np.ndarray:
+        """Get embeddings for a list of texts using OpenAI API with retry logic."""
+        last_error = None
+
+        for attempt in range(MAX_RETRIES):
+            try:
+                response = self.client.embeddings.create(
+                    model=self.embedding_model,
+                    input=texts,
+                )
+
+                # Log token usage for cost monitoring
+                if response.usage:
+                    logger.debug(
+                        "Embedding tokens used",
+                        total_tokens=response.usage.total_tokens,
+                        sentence_count=len(texts),
+                    )
+
+                embeddings = [item.embedding for item in response.data]
+                return np.array(embeddings)
+
+            except Exception as e:
+                last_error = e
+                if attempt < MAX_RETRIES - 1:
+                    delay = RETRY_BASE_DELAY * (2 ** attempt)
+                    logger.warning(
+                        "Embedding API failed, retrying",
+                        error=str(e),
+                        attempt=attempt + 1,
+                        retry_delay=delay,
+                    )
+                    time.sleep(delay)
+
+        logger.error("Embedding API failed after retries", error=str(last_error))
+        raise last_error
 
     def _cosine_similarity(self, a: np.ndarray, b: np.ndarray) -> float:
         """Calculate cosine similarity between two vectors."""
@@ -159,6 +188,14 @@ class SemanticTextChunker:
 
         return split_points
 
+    def _split_oversized_sentence(self, sentence: str) -> List[str]:
+        """
+        Split an oversized sentence using the fallback chunker.
+        Returns list of sub-chunks.
+        """
+        chunks = self._fallback_chunker.chunk_text(sentence)
+        return [chunk["text"] for chunk in chunks]
+
     def _merge_sentences_into_chunks(
         self,
         sentences: List[str],
@@ -171,20 +208,54 @@ class SemanticTextChunker:
         chunks = []
         current_chunk = []
         current_size = 0
+        pending_small_chunk = None  # Track undersized chunks to merge forward
 
         for i, sentence in enumerate(sentences):
             sentence_size = len(sentence)
 
-            # Check if we should split here
+            # Handle oversized single sentences
+            if sentence_size > self.max_chunk_size:
+                # First, save current chunk if any
+                if current_chunk:
+                    chunk_text = " ".join(current_chunk)
+                    if pending_small_chunk:
+                        chunk_text = pending_small_chunk + " " + chunk_text
+                        pending_small_chunk = None
+                    chunks.append(chunk_text)
+                    current_chunk = []
+                    current_size = 0
+
+                # Split the oversized sentence and add as separate chunks
+                sub_chunks = self._split_oversized_sentence(sentence)
+                chunks.extend(sub_chunks)
+                continue
+
+            # Check if we should split here (semantic boundary)
             should_split = i in split_points
 
-            # If adding this sentence would exceed max size, split first
+            # If adding this sentence would exceed max size, save current chunk first
             if current_chunk and current_size + sentence_size + 1 > self.max_chunk_size:
                 chunk_text = " ".join(current_chunk)
+
+                # Prepend any pending small chunk
+                if pending_small_chunk:
+                    chunk_text = pending_small_chunk + " " + chunk_text
+                    pending_small_chunk = None
+
                 if len(chunk_text) >= self.min_chunk_size:
                     chunks.append(chunk_text)
+                else:
+                    # Chunk is too small - save for merging with next chunk
+                    pending_small_chunk = chunk_text
+
                 current_chunk = []
                 current_size = 0
+
+            # Prepend pending small chunk to current if starting fresh
+            if not current_chunk and pending_small_chunk:
+                current_chunk.append(pending_small_chunk)
+                current_size = len(pending_small_chunk) + 1
+                pending_small_chunk = None
 
             # Add sentence to current chunk
             current_chunk.append(sentence)
@@ -197,14 +268,32 @@ class SemanticTextChunker:
                 current_chunk = []
                 current_size = 0
 
-        # Don't forget the last chunk
+        # Handle the last chunk
         if current_chunk:
             chunk_text = " ".join(current_chunk)
-            # If last chunk is too small, merge with previous
+
+            # Prepend any pending small chunk
+            if pending_small_chunk:
+                chunk_text = pending_small_chunk + " " + chunk_text
+                pending_small_chunk = None
+
+            # If last chunk is too small, try to merge with previous
             if len(chunk_text) < self.min_chunk_size and chunks:
-                chunks[-1] = chunks[-1] + " " + chunk_text
+                # Check if merging won't exceed max size
+                if len(chunks[-1]) + len(chunk_text) + 1 <= self.max_chunk_size:
+                    chunks[-1] = chunks[-1] + " " + chunk_text
+                else:
+                    # Can't merge - keep as separate (small) chunk
+                    chunks.append(chunk_text)
             else:
                 chunks.append(chunk_text)
+
+        # Handle any remaining pending small chunk
+        if pending_small_chunk:
+            if chunks and len(chunks[-1]) + len(pending_small_chunk) + 1 <= self.max_chunk_size:
+                chunks[-1] = chunks[-1] + " " + pending_small_chunk
+            else:
+                chunks.append(pending_small_chunk)
 
         return chunks
 
@@ -229,9 +318,9 @@ class SemanticTextChunker:
             return self._fallback_chunker.chunk_text(text, metadata)
 
         try:
-            # Get embeddings for all sentences
+            # Get embeddings for all sentences (with retry)
             logger.debug(f"Getting embeddings for {len(sentences)} sentences")
-            embeddings = self._get_embeddings(sentences)
+            embeddings = self._get_embeddings_with_retry(sentences)
 
             # Find semantic split points
             split_points = self._find_split_points(embeddings)
