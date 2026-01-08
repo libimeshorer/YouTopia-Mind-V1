@@ -52,12 +52,19 @@ def _store_insight_in_pinecone(
     tenant_id: UUID,
     insight_type: str,
     vector_store: CloneVectorStore,
-) -> None:
+    created_at: Optional[datetime] = None,
+) -> bool:
     """
     Embed and store an insight in Pinecone.
     
     If content is longer than chunk_size, it will be chunked.
     Otherwise, it will be stored as a single vector.
+    
+    Uses upsert pattern - if vectors with the same IDs exist, they will be replaced.
+    This makes the operation idempotent.
+    
+    TODO: If we add persistent sync status for Pinecone writes, add a column like
+    Insight.pinecone_synced_at and update it after successful upsert to enable retries/observability.
     
     Args:
         content: The insight content text
@@ -66,21 +73,28 @@ def _store_insight_in_pinecone(
         tenant_id: UUID of the tenant
         insight_type: Type of insight ("text" or "voice")
         vector_store: CloneVectorStore instance for this clone
+        created_at: Optional datetime for metadata (uses current time if not provided)
+    
+    Returns:
+        True if storage was successful, False otherwise
     """
     if not content or not content.strip():
         logger.warning("Empty insight content, skipping Pinecone storage", insight_id=str(insight_id))
-        return
+        return False
     
     try:
         chunker = TextChunker()
         chunk_size = settings.chunk_size
+        
+        # Use provided created_at or current time
+        metadata_created_at = created_at if created_at else datetime.utcnow()
         
         # Prepare base metadata
         base_metadata = {
             "insight_id": str(insight_id),
             "source": "insight",
             "type": insight_type,
-            "created_at": datetime.utcnow().isoformat(),
+            "created_at": metadata_created_at.isoformat(),
         }
         
         # Check if content needs chunking
@@ -90,7 +104,7 @@ def _store_insight_in_pinecone(
             
             if not chunks:
                 logger.warning("No chunks generated from insight", insight_id=str(insight_id))
-                return
+                return False
             
             # Prepare texts, metadatas, and IDs for chunked content
             texts = [chunk["text"] for chunk in chunks]
@@ -114,7 +128,7 @@ def _store_insight_in_pinecone(
                 chunked=False
             )
         
-        # Store in Pinecone
+        # Store in Pinecone (upsert - replaces existing vectors with same IDs)
         vector_store.add_texts(texts=texts, metadatas=metadatas, ids=ids)
         
         logger.info(
@@ -122,6 +136,7 @@ def _store_insight_in_pinecone(
             insight_id=str(insight_id),
             vector_count=len(ids)
         )
+        return True
     except Exception as e:
         # Log error but don't fail the API call
         logger.error(
@@ -130,6 +145,7 @@ def _store_insight_in_pinecone(
             insight_id=str(insight_id),
             exc_info=True
         )
+        return False
 
 
 def _delete_insight_from_pinecone(
@@ -214,7 +230,7 @@ async def create_insight(
     db.commit()
     db.refresh(insight)
     
-    # Store in Pinecone for RAG retrieval
+    # Store in Pinecone for RAG retrieval (upsert pattern - idempotent)
     try:
         data_access = CloneDataAccessService(clone_ctx.clone_id, clone_ctx.tenant_id, db)
         vector_store = data_access.get_vector_store()
@@ -225,7 +241,9 @@ async def create_insight(
             tenant_id=clone_ctx.tenant_id,
             insight_type=insight.type,
             vector_store=vector_store,
+            created_at=insight.created_at,
         )
+        # TODO: If we add persistent sync tracking, update pinecone_synced_at here on success/failure.
     except Exception as e:
         # Log error but don't fail the API call - insight is already saved in DB
         logger.error(
@@ -344,24 +362,12 @@ async def update_insight(
     data_access = CloneDataAccessService(clone_ctx.clone_id, clone_ctx.tenant_id, db)
     insight = data_access.validate_insight_access(insight_uuid)
     
-    # Only update Pinecone for text insights (voice insights handled after transcription)
-    if insight.type == "text":
-        try:
-            vector_store = data_access.get_vector_store()
-            # Delete old vectors
-            _delete_insight_from_pinecone(insight.id, vector_store)
-        except Exception as e:
-            logger.warning(
-                "Failed to delete old insight vectors from Pinecone",
-                error=str(e),
-                insight_id=str(insight.id)
-            )
-    
     insight.content = insight_data.content
     db.commit()
     db.refresh(insight)
     
     # Store updated content in Pinecone (only for text insights)
+    # Uses upsert pattern - existing vectors with same IDs will be replaced (idempotent)
     if insight.type == "text":
         try:
             vector_store = data_access.get_vector_store()
@@ -372,7 +378,9 @@ async def update_insight(
                 tenant_id=clone_ctx.tenant_id,
                 insight_type=insight.type,
                 vector_store=vector_store,
+                created_at=insight.created_at,
             )
+            # TODO: If we add persistent sync tracking, update pinecone_synced_at here on success/failure.
         except Exception as e:
             # Log error but don't fail the API call - insight is already updated in DB
             logger.error(
