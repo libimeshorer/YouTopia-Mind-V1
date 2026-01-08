@@ -55,7 +55,7 @@ class Settings(BaseSettings):
     chunk_overlap: int = Field(200, env="CHUNK_OVERLAP")
 
     # Semantic Chunking Settings
-    chunking_strategy: str = Field("recursive", env="CHUNKING_STRATEGY")  # "recursive" or "semantic"
+    chunking_strategy: str = Field("semantic", env="CHUNKING_STRATEGY")  # "recursive" or "semantic"
     semantic_similarity_threshold: float = Field(0.5, env="SEMANTIC_SIMILARITY_THRESHOLD")
     semantic_embedding_model: str = Field("text-embedding-3-small", env="SEMANTIC_EMBEDDING_MODEL")
     semantic_min_chunk_size: int = Field(100, env="SEMANTIC_MIN_CHUNK_SIZE")
