@@ -1,10 +1,10 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
-import { Upload, File, X, Search, Eye, Trash2, Loader2 } from "lucide-react";
+import { Upload, File, X, Search, Eye, Trash2, Loader2, ChevronDown, ChevronUp } from "lucide-react";
 import { apiClient } from "@/api/client";
 import { Document } from "@/types";
 import { useToast } from "@/hooks/use-toast";
@@ -24,6 +24,7 @@ export const DocumentUpload = ({ onUploadComplete }: DocumentUploadProps) => {
   const [dragActive, setDragActive] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [uploadingFiles, setUploadingFiles] = useState<Map<string, number>>(new Map());
+  const [showAllDocuments, setShowAllDocuments] = useState(false);
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -169,6 +170,18 @@ export const DocumentUpload = ({ onUploadComplete }: DocumentUploadProps) => {
     ? searchMutation.data || documents
     : documents;
 
+  // Reset showAllDocuments when search query changes
+  useEffect(() => {
+    setShowAllDocuments(false);
+  }, [searchQuery]);
+
+  // Calculate which documents to display
+  const displayDocuments = searchQuery
+    ? filteredDocuments
+    : showAllDocuments
+      ? filteredDocuments
+      : filteredDocuments.slice(0, 2);
+
   const formatFileSize = (bytes: number) => {
     if (bytes === 0) return "0 Bytes";
     const k = 1024;
@@ -306,7 +319,7 @@ export const DocumentUpload = ({ onUploadComplete }: DocumentUploadProps) => {
             </div>
           ) : (
             <div className="space-y-2">
-              {filteredDocuments.map((doc) => (
+              {displayDocuments.map((doc) => (
                 <div
                   key={doc.id}
                   className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors"
@@ -340,6 +353,26 @@ export const DocumentUpload = ({ onUploadComplete }: DocumentUploadProps) => {
                   </div>
                 </div>
               ))}
+              {!searchQuery && filteredDocuments.length > 2 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowAllDocuments(!showAllDocuments)}
+                  className="w-full text-xs text-muted-foreground mt-2"
+                >
+                  {showAllDocuments ? (
+                    <>
+                      <ChevronUp className="w-3 h-3 mr-1" />
+                      Show Less
+                    </>
+                  ) : (
+                    <>
+                      <ChevronDown className="w-3 h-3 mr-1" />
+                      Show More ({filteredDocuments.length - 2} more)
+                    </>
+                  )}
+                </Button>
+              )}
             </div>
           )}
         </CardContent>
