@@ -144,7 +144,8 @@ const Training = () => {
                 </CardContent>
               </Card>
 
-              {/* Section 1.2: Agent Interviewer */}
+              {/* TODO: UNCOMMENT WHEN AGENT INTERVIEWER IS IMPLEMENTED AND READY */}
+              {/* Section 1.2: Agent Interviewer
               <Card data-training-section>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
@@ -164,6 +165,19 @@ const Training = () => {
                       Coming Soon
                     </Button>
                   </div>
+                </CardContent>
+              </Card> */}
+
+              {/* Section 1.2: Record Insights */}
+              <Card data-training-section>
+                <CardHeader>
+                  <CardTitle>2. Record Insights</CardTitle>
+                  <CardDescription>
+                    Record voice notes or add text insights about yourself
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <InsightsManager />
                 </CardContent>
               </Card>
 
@@ -232,19 +246,6 @@ const Training = () => {
                       <p>No integrations available yet</p>
                     </div>
                   )}
-                </CardContent>
-              </Card>
-
-              {/* Section 1.4: Record Insights */}
-              <Card data-training-section>
-                <CardHeader>
-                  <CardTitle>4. Record Insights</CardTitle>
-                  <CardDescription>
-                    Record voice notes or add text insights about yourself
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <InsightsManager />
                 </CardContent>
               </Card>
             </div>
