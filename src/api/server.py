@@ -3,7 +3,7 @@
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from src.api.routers import documents, insights, training, integrations, chat
+from src.api.routers import documents, insights, training, integrations, chat, agent
 from src.utils.logging import get_logger
 from src.config.settings import settings
 from src.utils.environment import (
@@ -166,6 +166,7 @@ app.include_router(insights.router, prefix="/api/clone", tags=["insights"])
 app.include_router(training.router, prefix="/api/clone", tags=["training"])
 app.include_router(integrations.router, prefix="/api/clone", tags=["integrations"])
 app.include_router(chat.router, prefix="/api/clone", tags=["chat"])
+app.include_router(agent.router, prefix="/api/clone", tags=["agent"])
 
 
 if __name__ == "__main__":

@@ -145,3 +145,76 @@ export interface SendMessageResponse {
   cloneMessage: ChatMessage;
 }
 
+// Agent types
+export interface AgentCapability {
+  id: string;
+  platform: string;
+  capabilityType: string;
+  status: 'active' | 'paused' | 'setup_required' | 'error';
+  config: Record<string, unknown>;
+  lastRunAt?: string;
+  errorMessage?: string;
+  createdAt: string;
+}
+
+export interface AgentObservation {
+  id: string;
+  content: string;
+  sourceMetadata: {
+    channel_id?: string;
+    channel_name?: string;
+    author_id?: string;
+    author_name?: string;
+    thread_ts?: string;
+    has_thread?: boolean;
+  };
+  classification?: string;
+  classificationConfidence?: number;
+  classificationReasoning?: string;
+  needsReview: boolean;
+  userFeedback?: string;
+  status: 'classified' | 'reviewed';
+  observedAt: string;
+  createdAt: string;
+}
+
+export interface DigestStats {
+  totalObservations: number;
+  pendingReview: number;
+  veryInterestingCount: number;
+  interestingCount: number;
+  interestingShown: number;
+  reviewNeededCount: number;
+  lastObservationAt?: string;
+  periodDays: number;
+}
+
+export interface AgentDigest {
+  veryInteresting: AgentObservation[];
+  interesting: AgentObservation[];
+  reviewNeeded: AgentObservation[];
+  notInterestingSample: AgentObservation[];
+  stats: DigestStats;
+}
+
+export interface AgentPreference {
+  id: string;
+  preferenceType: string;
+  platform?: string;
+  description?: string;
+  keywords: string[];
+  examplesCount: number;
+}
+
+export interface SlackSetupRequest {
+  integrationId: string;
+  channels: { id: string; name: string }[];
+  preferences: {
+    [key: string]: {
+      description: string;
+      keywords?: string[];
+      example?: { text: string; explanation: string };
+    };
+  };
+}
+

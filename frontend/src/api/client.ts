@@ -2,7 +2,7 @@
  * API client for backend communication
  */
 
-import { Document, Insight, CloneAction, Conversation, Integration, ChatSession, ChatMessage, SendMessageRequest, SendMessageResponse } from "@/types";
+import { Document, Insight, CloneAction, Conversation, Integration, ChatSession, ChatMessage, SendMessageRequest, SendMessageResponse, AgentCapability, AgentDigest, AgentPreference, SlackSetupRequest } from "@/types";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -348,6 +348,76 @@ export const apiClient = {
     // Submit feedback on a clone message
     submitFeedback: async (messageId: string, rating: number): Promise<void> => {
       return apiClient.post<void>(`/api/clone/chat/message/${messageId}/feedback`, { rating });
+    },
+  },
+
+  // Agent endpoints
+  agent: {
+    // Capabilities
+    listCapabilities: (): Promise<AgentCapability[]> => {
+      return apiClient.get<AgentCapability[]>("/api/clone/agent/capabilities");
+    },
+
+    setupSlack: (data: SlackSetupRequest): Promise<AgentCapability> => {
+      return apiClient.post<AgentCapability>("/api/clone/agent/capabilities/slack/setup", data);
+    },
+
+    updateCapability: (id: string, config: Record<string, unknown>): Promise<{ success: boolean }> => {
+      return apiClient.request<{ success: boolean }>(`/api/clone/agent/capabilities/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(config),
+      });
+    },
+
+    deleteCapability: (id: string): Promise<{ success: boolean }> => {
+      return apiClient.delete<{ success: boolean }>(`/api/clone/agent/capabilities/${id}`);
+    },
+
+    // Digest
+    getDigest: (days: number = 7): Promise<AgentDigest> => {
+      return apiClient.get<AgentDigest>(`/api/clone/agent/digest?days=${days}`);
+    },
+
+    // Feedback
+    submitObservationFeedback: (
+      observationId: string,
+      feedback: string,
+      comment?: string
+    ): Promise<{ success: boolean; preferenceUpdated: boolean }> => {
+      return apiClient.post<{ success: boolean; preferenceUpdated: boolean }>(
+        `/api/clone/agent/observations/${observationId}/feedback`,
+        { feedback, comment }
+      );
+    },
+
+    // Preferences
+    listPreferences: (): Promise<AgentPreference[]> => {
+      return apiClient.get<AgentPreference[]>("/api/clone/agent/preferences");
+    },
+
+    addExample: (
+      preferenceType: string,
+      text: string,
+      explanation: string
+    ): Promise<{ success: boolean; exampleId: string }> => {
+      return apiClient.post<{ success: boolean; exampleId: string }>(
+        `/api/clone/agent/preferences/${preferenceType}/examples`,
+        { text, explanation }
+      );
+    },
+
+    updatePreference: (
+      preferenceType: string,
+      description: string,
+      keywords?: string[]
+    ): Promise<{ success: boolean }> => {
+      return apiClient.request<{ success: boolean }>(
+        `/api/clone/agent/preferences/${preferenceType}`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({ description, keywords }),
+        }
+      );
     },
   },
 };

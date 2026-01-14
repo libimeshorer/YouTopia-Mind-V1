@@ -14,6 +14,7 @@ import Dashboard from "./pages/Dashboard";
 import Training from "./pages/Training";
 import Activity from "./pages/Activity";
 import Chat from "./pages/Chat";
+import AgentDigest from "./pages/AgentDigest";
 import NotFound from "./pages/NotFound";
 import ProtectedRoute from "./components/layout/ProtectedRoute";
 
@@ -65,6 +66,14 @@ const AppContent = () => (
             element={
               <ProtectedRoute>
                 <Chat />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/agent/digest"
+            element={
+              <ProtectedRoute>
+                <AgentDigest />
               </ProtectedRoute>
             }
           />

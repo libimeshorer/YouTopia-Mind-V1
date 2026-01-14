@@ -48,3 +48,7 @@ python-jose[cryptography]>=3.4.0
 # Vector Database
 pinecone>=5.0.0
 
+# Task Queue (Celery + Redis)
+celery[redis]>=5.3.0
+redis>=5.0.0
+
