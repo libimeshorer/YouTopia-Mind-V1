@@ -1,6 +1,6 @@
 """SQLAlchemy database models"""
 
-from sqlalchemy import Column, String, Integer, Boolean, DateTime, ForeignKey, Text, JSON, Float, BigInteger, Enum
+from sqlalchemy import Column, String, Integer, Boolean, DateTime, ForeignKey, Text, JSON, Float, BigInteger, Enum, UniqueConstraint, Index
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import text
@@ -51,6 +51,10 @@ class Clone(Base):
     sessions = relationship("Session", back_populates="clone", cascade="all, delete-orphan")
     data_sources = relationship("DataSource", back_populates="clone", cascade="all, delete-orphan")
     chunk_scores = relationship("ChunkScore", back_populates="clone", cascade="all, delete-orphan")
+    # Agent capabilities
+    agent_capabilities = relationship("AgentCapability", back_populates="clone", cascade="all, delete-orphan")
+    agent_preferences = relationship("AgentPreference", back_populates="clone", cascade="all, delete-orphan")
+    agent_observations = relationship("AgentObservation", back_populates="clone", cascade="all, delete-orphan")
 
 
 class Session(Base):
@@ -170,6 +174,7 @@ class Integration(Base):
     # Relationships
     clone = relationship("Clone", back_populates="integrations")
     data_sources = relationship("DataSource", back_populates="integration", cascade="all, delete-orphan")
+    agent_capabilities = relationship("AgentCapability", back_populates="integration")
 
 
 class Message(Base):
@@ -260,3 +265,131 @@ class ChunkScore(Base):
 
     # Relationship
     clone = relationship("Clone", back_populates="chunk_scores")
+
+
+# =============================================================================
+# AGENT MODELS - For agentic capabilities (Slack observer, etc.)
+# =============================================================================
+
+class AgentCapability(Base):
+    """Tracks which agent capabilities are enabled for a clone"""
+    __tablename__ = "agent_capabilities"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, server_default=text('gen_random_uuid()'))
+    clone_id = Column(UUID(as_uuid=True), ForeignKey("clones.id", ondelete="CASCADE"), nullable=False, index=True)
+    integration_id = Column(UUID(as_uuid=True), ForeignKey("integrations.id", ondelete="SET NULL"), nullable=True)
+
+    platform = Column(String(50), nullable=False)  # "slack", "email", etc.
+    capability_type = Column(String(50), nullable=False)  # "observer", "drafter"
+    config = Column(JSON, nullable=False, server_default=text("'{}'::json"))  # {channels: [...], frequency_minutes: 240}
+    status = Column(
+        Enum('active', 'paused', 'setup_required', 'error', name='agent_capability_status'),
+        default='active',
+        nullable=False
+    )
+    last_run_at = Column(DateTime, nullable=True)
+    error_message = Column(Text, nullable=True)
+
+    created_at = Column(DateTime, server_default=text('now()'), nullable=False)
+    updated_at = Column(DateTime, server_default=text('now()'), onupdate=text('now()'), nullable=False)
+
+    # Relationships
+    clone = relationship("Clone", back_populates="agent_capabilities")
+    integration = relationship("Integration", back_populates="agent_capabilities")
+    observations = relationship("AgentObservation", back_populates="capability", cascade="all, delete-orphan")
+    checkpoints = relationship("ObservationCheckpoint", back_populates="capability", cascade="all, delete-orphan")
+
+    __table_args__ = (
+        UniqueConstraint('clone_id', 'platform', 'capability_type', name='uq_capability_clone_platform_type'),
+    )
+
+
+class AgentPreference(Base):
+    """Learned preferences for classification per capability type"""
+    __tablename__ = "agent_preferences"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, server_default=text('gen_random_uuid()'))
+    clone_id = Column(UUID(as_uuid=True), ForeignKey("clones.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    capability_type = Column(String(50), nullable=False)  # "observer", "drafter"
+    platform = Column(String(50), nullable=True)  # "slack", null = universal
+    preference_type = Column(String(50), nullable=False)  # "very_interesting", "interesting", "not_interesting"
+
+    description = Column(Text, nullable=True)  # User's description of this category
+    keywords = Column(JSON, nullable=False, server_default=text("'[]'::json"))  # ["partnership", "funding"]
+    examples = Column(JSON, nullable=False, server_default=text("'[]'::json"))  # [{text, explanation, source}]
+
+    created_at = Column(DateTime, server_default=text('now()'), nullable=False)
+    updated_at = Column(DateTime, server_default=text('now()'), onupdate=text('now()'), nullable=False)
+
+    # Relationships
+    clone = relationship("Clone", back_populates="agent_preferences")
+
+    __table_args__ = (
+        UniqueConstraint('clone_id', 'capability_type', 'platform', 'preference_type', name='uq_preference_clone_capability_platform_type'),
+    )
+
+
+class AgentObservation(Base):
+    """Messages/items observed from external sources (only stores interesting + sample)"""
+    __tablename__ = "agent_observations"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, server_default=text('gen_random_uuid()'))
+    clone_id = Column(UUID(as_uuid=True), ForeignKey("clones.id", ondelete="CASCADE"), nullable=False, index=True)
+    capability_id = Column(UUID(as_uuid=True), ForeignKey("agent_capabilities.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    # Source identification
+    source_type = Column(String(50), nullable=False)  # "slack_message"
+    source_id = Column(String(255), nullable=False)  # Slack message ts
+    source_metadata = Column(JSON, nullable=False, server_default=text("'{}'::json"))  # {channel_id, channel_name, author_id, author_name, thread_ts}
+
+    # Content
+    content = Column(Text, nullable=False)
+
+    # Classification
+    classification = Column(String(50), nullable=True)  # "very_interesting", "interesting", "not_interesting"
+    classification_confidence = Column(Float, nullable=True)
+    classification_reasoning = Column(Text, nullable=True)
+    needs_review = Column(Boolean, default=False, nullable=False)  # True if confidence < 0.7
+
+    # User feedback
+    user_feedback = Column(String(50), nullable=True)  # "confirmed", "corrected_to_interesting", etc.
+    status = Column(
+        Enum('classified', 'reviewed', name='observation_status'),
+        default='classified',
+        nullable=False
+    )
+
+    observed_at = Column(DateTime, nullable=False)  # When message was posted in source
+    created_at = Column(DateTime, server_default=text('now()'), nullable=False)
+
+    # Relationships
+    clone = relationship("Clone", back_populates="agent_observations")
+    capability = relationship("AgentCapability", back_populates="observations")
+
+    __table_args__ = (
+        UniqueConstraint('clone_id', 'source_type', 'source_id', name='uq_observation_clone_source'),
+        Index('ix_observation_clone_classification', 'clone_id', 'classification'),
+    )
+
+
+class ObservationCheckpoint(Base):
+    """Lightweight tracking of observation progress per channel"""
+    __tablename__ = "observation_checkpoints"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, server_default=text('gen_random_uuid()'))
+    capability_id = Column(UUID(as_uuid=True), ForeignKey("agent_capabilities.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    channel_id = Column(String(100), nullable=False)  # Slack channel ID
+    last_message_ts = Column(String(50), nullable=True)  # Last seen message timestamp
+    last_observed_at = Column(DateTime, nullable=True)
+
+    messages_seen = Column(Integer, default=0, nullable=False)  # Running count for stats
+    messages_stored = Column(Integer, default=0, nullable=False)  # How many we kept
+
+    # Relationships
+    capability = relationship("AgentCapability", back_populates="checkpoints")
+
+    __table_args__ = (
+        UniqueConstraint('capability_id', 'channel_id', name='uq_checkpoint_capability_channel'),
+    )
