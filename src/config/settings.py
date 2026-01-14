@@ -37,6 +37,9 @@ class Settings(BaseSettings):
     pinecone_api_key: str = Field(..., env="PINECONE_API_KEY")
     pinecone_index_name: str = Field("youtopia-dev", env="PINECONE_INDEX_NAME")
 
+    # Redis (for Celery task queue)
+    redis_url: Optional[str] = Field(None, env="REDIS_URL")
+
     # Vector Database (legacy - kept for backward compatibility)
     chroma_db_path: str = Field("./data/chroma_db", env="CHROMA_DB_PATH")
     chroma_persist_directory: str = Field("./data/chroma_db", env="CHROMA_PERSIST_DIRECTORY")
