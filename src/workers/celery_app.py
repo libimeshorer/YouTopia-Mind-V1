@@ -1,11 +1,37 @@
 """Celery application configuration for YouTopia Mind agent tasks"""
 
-import os
+import logging
 from celery import Celery
 from celery.schedules import crontab
 
-# Get Redis URL from environment
-REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+logger = logging.getLogger(__name__)
+
+
+def get_redis_url() -> str:
+    """
+    Get Redis URL from settings with fallback for local development.
+
+    Uses late import to avoid circular dependencies and ensure
+    settings are loaded with proper environment file handling.
+    """
+    try:
+        from src.config.settings import settings
+        if settings.redis_url:
+            return settings.redis_url
+    except Exception as e:
+        logger.warning(f"Could not load settings, using default Redis URL: {e}")
+
+    # Fallback for local development
+    return "redis://localhost:6379/0"
+
+
+# Get Redis URL using centralized settings
+REDIS_URL = get_redis_url()
+
+# TODO: Consider using separate Redis databases for broker and results backend
+# to avoid potential key collisions in production:
+#   broker: redis://host:6379/0
+#   backend: redis://host:6379/1
 
 # Create Celery app
 celery_app = Celery(
@@ -37,6 +63,17 @@ celery_app.conf.update(
 
     # Results
     result_expires=3600,  # Results expire after 1 hour
+
+    # Broker connection settings
+    broker_connection_retry_on_startup=True,
+    broker_connection_timeout=10,  # 10 seconds connection timeout
+    broker_pool_limit=10,  # Connection pool size
+    broker_transport_options={
+        "visibility_timeout": 43200,  # 12 hours - must be > longest task
+    },
+
+    # Worker settings
+    worker_cancel_long_running_tasks_on_connection_loss=True,
 )
 
 # Beat schedule - periodic tasks
