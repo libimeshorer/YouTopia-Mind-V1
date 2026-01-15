@@ -1,5 +1,7 @@
 """Personality profile data model"""
 
+# TODO: currently unused. Update logic and call it when relevant.
+
 from typing import Dict, List, Optional
 from pydantic import BaseModel, Field
 from datetime import datetime

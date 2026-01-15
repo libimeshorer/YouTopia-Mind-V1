@@ -1,8 +1,10 @@
 """Prompt builder that combines RAG context with personality profile"""
+# TODO: review when starting using bots.
 
 from typing import List, Dict, Optional
 from uuid import UUID
 from src.llm.client import LLMClient
+from src.llm.prompt_service import PromptService
 from src.rag.retriever import RAGRetriever
 from src.rag.clone_vector_store import CloneVectorStore
 from src.personality.profile import PersonalityProfile
@@ -22,48 +24,25 @@ class PromptBuilder:
     ):
         self.llm_client = llm_client or LLMClient()
         self.rag_retriever = rag_retriever or RAGRetriever()
+        self.prompt_service = PromptService(llm_client=self.llm_client)
     
     def build_system_prompt(self, profile: Optional[PersonalityProfile] = None) -> str:
-        """Build system prompt with personality profile"""
-        base_prompt = """You are a digital twin (AI clone) of a professional. Your responses should reflect their knowledge, communication style, and personality traits."""
+        """
+        Build system prompt with personality profile.
         
-        if profile:
-            style = profile.communication_style
-            
-            # Build personality instructions
-            personality_instructions = [
-                f"Communication Style:",
-                f"- Formality level: {style.formality_level}",
-                f"- Detail preference: {style.detail_level}",
-                f"- Directness: {style.directness}",
-                f"- Decision-making approach: {style.decision_making_style}",
-                f"- Average sentence length: {style.sentence_length_avg:.1f} words",
-            ]
-            
-            if style.common_phrases:
-                personality_instructions.append(f"- Common phrases you use: {', '.join(style.common_phrases[:5])}")
-            
-            if profile.tone_characteristics:
-                dominant_tone = max(profile.tone_characteristics.items(), key=lambda x: x[1])[0]
-                personality_instructions.append(f"- Tone: {dominant_tone}")
-            
-            personality_section = "\n".join(personality_instructions)
-            
-            system_prompt = f"""{base_prompt}
-
-Your personality and communication style:
-{personality_section}
-
-When responding:
-- Match the communication style described above
-- Use similar sentence structures and vocabulary
-- Maintain the same level of formality and detail
-- Reflect the decision-making approach
-- Stay true to the personality traits"""
-        else:
-            system_prompt = base_prompt
-        
-        return system_prompt
+        DEPRECATED: This method is kept for backward compatibility.
+        The actual prompt building logic is now in PromptService.
+        """
+        # Use PromptService to build system prompt
+        # Note: PromptService uses clone_name, but this method only has profile
+        # For backward compatibility, we'll use a default clone name
+        clone_name = profile.person_name if profile and profile.person_name else "professional"
+        return self.prompt_service.build_messages(
+            current_message="",  # Empty since we only want the system prompt
+            rag_context="",
+            conversation_history=None,
+            clone_name=clone_name,
+        )[0]["content"]
     
     def build_messages(
         self,
@@ -74,13 +53,12 @@ When responding:
         clone_id: Optional[UUID] = None,
         tenant_id: Optional[UUID] = None,
     ) -> List[Dict[str, str]]:
-        """Build messages for LLM with context and personality"""
-        messages = []
+        """
+        Build messages for LLM with context and personality.
         
-        # System prompt with personality
-        system_prompt = self.build_system_prompt(profile)
-        messages.append({"role": "system", "content": system_prompt})
-        
+        This method now uses PromptService for the actual prompt building.
+        It still handles RAG retrieval internally for backward compatibility.
+        """
         # Retrieve relevant context (automatically filtered by clone_id/tenant_id if CloneVectorStore is used)
         context = ""
         if include_context:
@@ -90,23 +68,20 @@ When responding:
                 top_k=settings.top_k_retrieval,
             )
         
-        # Build user message with context
-        if context:
-            user_message = f"""Based on the following context from your knowledge base:
-
-{context}
-
----
-
-User question: {user_query}
-
-Please respond in your typical communication style, using the knowledge from the context above."""
-        else:
-            user_message = user_query
+        # Determine clone name from profile or use default
+        clone_name = "professional"
+        if profile and profile.person_name:
+            clone_name = profile.person_name
         
-        messages.append({"role": "user", "content": user_message})
+        # Use PromptService to build messages (uses ChatService logic - context in system message)
+        messages = self.prompt_service.build_messages(
+            current_message=user_query,
+            rag_context=context,
+            conversation_history=None,  # PromptBuilder doesn't support conversation history
+            clone_name=clone_name,
+        )
         
-        # Check token limits
+        # Check token limits (maintain backward compatibility)
         max_tokens = max_context_tokens or settings.max_context_tokens
         total_estimated_tokens = sum(self.llm_client.count_tokens(msg["content"]) for msg in messages)
         
@@ -122,17 +97,15 @@ Please respond in your typical communication style, using the knowledge from the
                 if context_tokens > max_tokens // 2:
                     # Truncate context
                     truncated_length = (max_tokens // 2) * 4  # Rough char estimate
-                    context = context[:truncated_length] + "..."
-                    user_message = f"""Based on the following context from your knowledge base:
-
-{context}
-
----
-
-User question: {user_query}
-
-Please respond in your typical communication style, using the knowledge from the context above."""
-                    messages[-1]["content"] = user_message
+                    truncated_context = context[:truncated_length].rsplit(" ", 1)[0] + "..."
+                    
+                    # Rebuild messages with truncated context
+                    messages = self.prompt_service.build_messages(
+                        current_message=user_query,
+                        rag_context=truncated_context,
+                        conversation_history=None,
+                        clone_name=clone_name,
+                    )
         
         return messages
     

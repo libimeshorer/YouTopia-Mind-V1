@@ -21,6 +21,7 @@ from src.database.models import Session as ChatSession, Message, Clone
 from src.rag.retriever import RAGRetriever
 from src.rag.clone_vector_store import CloneVectorStore
 from src.llm.client import LLMClient
+from src.llm.prompt_service import PromptService
 from src.services.chunk_score_service import ChunkScoreService
 from src.utils.logging import get_logger
 
@@ -58,6 +59,9 @@ class ChatService:
 
         # Initialize LLM client
         self.llm_client = llm_client or LLMClient()
+
+        # Initialize prompt service
+        self.prompt_service = PromptService(llm_client=self.llm_client)
 
         # Initialize chunk score service for RL-based retrieval boosting
         self.chunk_score_service = ChunkScoreService(db)
@@ -234,11 +238,12 @@ class ChatService:
             else "the AI Clone"
         )
 
-        llm_messages = self._build_llm_messages(
-            clone_name=clone_name,
+        # TODO: Add style instructions to the prompt service
+        llm_messages = self.prompt_service.build_messages(
+            current_message=user_message,
             rag_context=rag_context_str,
             conversation_history=conversation_history,
-            current_message=user_message,
+            clone_name=clone_name,
         )
 
         # Generate clone response
@@ -356,51 +361,3 @@ class ChatService:
 
         return message
 
-    def _build_llm_messages(
-        self,
-        clone_name: str,
-        rag_context: str,
-        conversation_history: List[Message],
-        current_message: str,
-    ) -> List[Dict[str, str]]:
-        """Build messages array for LLM API call"""
-        messages = []
-
-        # System message with RAG context
-        system_prompt = f"""You are {clone_name}'s AI clone, that thinks like them and acts like them. 
-        You can help {clone_name}'s customers with their professional questions, answering based on your knowledge.
-
-Your knowledge comes from the following sources:
-
-{rag_context if rag_context else "No specific context available for this query."}
-
-Instructions:
-- Answer as {clone_name}, speaking in first person
-- Replicate {clone_name}'s communication style when possible and relevant
-- Use the provided context to answer questions accurately
-- If the context doesn't contain relevant information, say so honestly
-- Be helpful, concise, and professional
-- Maintain conversation continuity by referencing earlier messages when relevant 
-"""
-
-        messages.append({
-            "role": "system",
-            "content": system_prompt,
-        })
-
-        # Add conversation history (last 10 messages for context)
-        recent_history = conversation_history[-10:] if len(conversation_history) > 10 else conversation_history
-        for msg in recent_history:
-            role = "user" if msg.role == "external_user" else "assistant"
-            messages.append({
-                "role": role,
-                "content": msg.content,
-            })
-
-        # Add current message
-        messages.append({
-            "role": "user",
-            "content": current_message,
-        })
-
-        return messages
