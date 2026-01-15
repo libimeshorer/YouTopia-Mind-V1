@@ -2,7 +2,7 @@
 
 # TODO: currently unused. Update logic and call it when relevant.
 
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 from pydantic import BaseModel, Field
 from datetime import datetime
 
@@ -23,7 +23,7 @@ class PersonalityProfile(BaseModel):
     person_name: Optional[str] = None
     communication_style: CommunicationStyle = Field(default_factory=CommunicationStyle)
     knowledge_domains: List[str] = Field(default_factory=list, description="Areas of expertise")
-    writing_patterns: Dict[str, any] = Field(default_factory=dict, description="Writing pattern analysis")
+    writing_patterns: Dict[str, Any] = Field(default_factory=dict, description="Writing pattern analysis")
     tone_characteristics: Dict[str, float] = Field(default_factory=dict, description="Tone analysis")
     created_at: datetime = Field(default_factory=datetime.now)
     updated_at: datetime = Field(default_factory=datetime.now)
