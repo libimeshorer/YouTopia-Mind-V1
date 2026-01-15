@@ -112,6 +112,93 @@ async def health_check():
     return {"status": "healthy", "service": "youtopia-mind-api"}
 
 
+@app.get("/health/celery")
+async def celery_health_check():
+    """
+    Celery worker health check endpoint.
+
+    Checks:
+    - Redis broker connectivity
+    - Worker availability
+    - Registered tasks
+
+    Returns:
+        200: Workers healthy and responding
+        503: Workers unavailable or unhealthy
+    """
+    from fastapi import HTTPException
+    import asyncio
+
+    try:
+        # Import celery app (may fail if Redis unavailable)
+        from src.workers.celery_app import celery_app
+
+        # Run blocking celery operations in thread pool
+        def check_celery():
+            result = {
+                "status": "healthy",
+                "broker_connected": False,
+                "workers": [],
+                "registered_tasks": [],
+            }
+
+            try:
+                # Check broker connection by pinging workers
+                inspect = celery_app.control.inspect(timeout=5.0)
+                ping_response = inspect.ping()
+
+                if ping_response:
+                    result["broker_connected"] = True
+                    result["workers"] = list(ping_response.keys())
+
+                    # Get registered tasks from first worker
+                    registered = inspect.registered()
+                    if registered:
+                        first_worker = list(registered.keys())[0]
+                        result["registered_tasks"] = [
+                            t for t in registered[first_worker]
+                            if t.startswith("src.workers.tasks.")
+                        ]
+                else:
+                    result["status"] = "degraded"
+                    result["error"] = "No workers responding"
+
+            except Exception as e:
+                result["status"] = "unhealthy"
+                result["error"] = str(e)
+
+            return result
+
+        # Run in thread pool to avoid blocking
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(None, check_celery)
+
+        if result["status"] == "unhealthy":
+            raise HTTPException(status_code=503, detail=result)
+
+        return result
+
+    except ImportError as e:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "status": "unhealthy",
+                "error": f"Celery not configured: {str(e)}",
+            }
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Celery health check failed: {e}")
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "status": "unhealthy",
+                "error": str(e),
+            }
+        )
+
+
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
     """HTTPException handler with CORS headers"""
