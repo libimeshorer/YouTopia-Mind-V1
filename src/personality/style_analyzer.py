@@ -1,5 +1,7 @@
 """Communication style analyzer"""
 
+# TODO: Understand where and how to use. Update logic accordingly.
+
 import re
 from typing import List, Dict, Optional
 from collections import Counter
