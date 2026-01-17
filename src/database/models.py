@@ -203,7 +203,7 @@ class Message(Base):
     # Enhanced feedback (see docs/RL_OVERVIEW.md)
     style_rating = Column(Integer, nullable=True)     # Style rating: -1, 0, 1, or null (owner only)
     feedback_source = Column(String(20), nullable=True)  # 'owner' or 'external_user'
-    feedback_text = Column(Text, nullable=True)       # Optional correction text on negative feedback
+    feedback_text = Column(Text, nullable=True)       # Optional comment on any feedback
 
     # Performance metrics (for clone messages)
     tokens_used = Column(Integer, nullable=True)

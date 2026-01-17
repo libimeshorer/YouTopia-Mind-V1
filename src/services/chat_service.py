@@ -321,7 +321,7 @@ class ChatService:
             content_rating: -1 (thumbs down) or 1 (thumbs up) for content quality
             feedback_source: 'owner' or 'external_user'
             style_rating: Optional -1, 0, or 1 for "sounds like me" (owner only)
-            feedback_text: Optional correction text on negative feedback
+            feedback_text: Optional comment on any feedback
 
         Returns:
             The updated message

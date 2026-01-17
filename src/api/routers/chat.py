@@ -69,7 +69,7 @@ class SubmitFeedbackRequest(BaseModel):
     Enhanced feedback supports:
     - Content rating (required): Was the response accurate? (-1 or 1)
     - Style rating (optional): Does it sound like me? (-1, 0, or 1)
-    - Feedback text (optional): Correction text on negative feedback
+    - Feedback text (optional): Comment on any feedback
 
     Note: feedback_source is derived server-side from authentication context.
     This endpoint requires auth, so feedback_source is always 'owner'.
@@ -77,7 +77,7 @@ class SubmitFeedbackRequest(BaseModel):
     """
     contentRating: int  # Required: -1 (thumbs down) or 1 (thumbs up)
     styleRating: Optional[int] = None  # Optional: -1, 0, or 1
-    feedbackText: Optional[str] = None  # Optional: correction text
+    feedbackText: Optional[str] = None  # Optional: comment text
 
 
 class CloneInfoResponse(BaseModel):

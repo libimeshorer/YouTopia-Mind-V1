@@ -112,7 +112,7 @@ The feedback system supports dual-dimension ratings and differentiates between f
 |-----------|-----|--------|---------|
 | Content Rating | Everyone | -1, +1 | "Was this response accurate?" |
 | Style Rating | Owner only | -1, 0, +1 | "Does this sound like me?" |
-| Feedback Text | Everyone | Free text | Optional correction on negative feedback |
+| Feedback Text | Everyone | Free text | Optional comment on any feedback |
 
 ### Feedback Sources
 
@@ -172,7 +172,7 @@ With protection: Re-submitting feedback updates the stored rating but doesn't re
 -- Messages table additions (migration 004):
 ALTER TABLE messages ADD COLUMN style_rating INTEGER;       -- -1, 0, 1, or NULL
 ALTER TABLE messages ADD COLUMN feedback_source VARCHAR(20); -- 'owner' or 'external_user'
-ALTER TABLE messages ADD COLUMN feedback_text TEXT;          -- Optional correction
+ALTER TABLE messages ADD COLUMN feedback_text TEXT;          -- Optional comment
 ```
 
 ### API Schema
@@ -182,7 +182,7 @@ ALTER TABLE messages ADD COLUMN feedback_text TEXT;          -- Optional correct
 class SubmitFeedbackRequest(BaseModel):
     contentRating: int           # Required: -1 or 1
     styleRating: Optional[int]   # Optional: -1, 0, or 1
-    feedbackText: Optional[str]  # Optional: correction text
+    feedbackText: Optional[str]  # Optional: comment text
     # Note: feedbackSource derived server-side (always 'owner' for this endpoint)
 ```
 
