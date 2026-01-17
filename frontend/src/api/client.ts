@@ -345,9 +345,17 @@ export const apiClient = {
       return apiClient.get<ChatMessage[]>(`/api/clone/chat/session/${sessionId}/messages`);
     },
 
-    // Submit feedback on a clone message
-    submitFeedback: async (messageId: string, rating: number): Promise<void> => {
-      return apiClient.post<void>(`/api/clone/chat/message/${messageId}/feedback`, { rating });
+    // Submit feedback on a clone message (batch submission from frontend)
+    submitFeedback: async (
+      messageId: string,
+      feedback: {
+        contentRating?: number;
+        styleRating?: number;
+        contentFeedbackText?: string;
+        styleFeedbackText?: string;
+      }
+    ): Promise<void> => {
+      return apiClient.post<void>(`/api/clone/chat/message/${messageId}/feedback`, feedback);
     },
   },
 };

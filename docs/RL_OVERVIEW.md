@@ -51,6 +51,7 @@ User Message
 |-----------|------|---------|
 | Migration | `alembic/versions/002_add_chunk_scores.py` | Creates `chunk_scores` table |
 | Migration | `alembic/versions/004_add_enhanced_feedback.py` | Adds enhanced feedback columns |
+| Migration | `alembic/versions/005_split_feedback_text.py` | Splits feedback text into content/style |
 | Model | `src/database/models.py` | `ChunkScore` + `Message` feedback fields |
 | Service | `src/services/chunk_score_service.py` | Score updates (with weight support) |
 | Retriever | `src/rag/retriever.py` | Applies score boosts during retrieval |
@@ -111,8 +112,9 @@ The feedback system supports dual-dimension ratings and differentiates between f
 | Dimension | Who | Values | Purpose |
 |-----------|-----|--------|---------|
 | Content Rating | Everyone | -1, +1 | "Was this response accurate?" |
-| Style Rating | Owner only | -1, 0, +1 | "Does this sound like me?" |
-| Feedback Text | Everyone | Free text | Optional comment on any feedback |
+| Style Rating | Owner only | -1, +1 | "Does this sound like me?" (binary) |
+| Content Feedback Text | Everyone | Free text | Optional note for content rating |
+| Style Feedback Text | Owner only | Free text | Optional note for style rating |
 
 ### Feedback Sources
 
@@ -147,32 +149,34 @@ weight = 2.0 if feedback_source == 'owner' else 1.0
 score = score * DECAY + rating * LEARNING_RATE * weight
 ```
 
-### Duplicate Feedback Protection
+### Batch Submission (Misclick Protection)
 
-Chunk scores are only updated on the **first** feedback submission for a message:
+Frontend uses **batch submission** with a 4-second delay to prevent misclicks from corrupting RL scores:
 
-```python
-# In ChatService.submit_feedback():
-already_has_feedback = message.feedback_rating is not None
-if already_has_feedback:
-    # Update stored rating but skip RL update
-    return message
+```
+User clicks 👍 → stored locally (not submitted)
+User realizes mistake, clicks 👎 → local state updated
+4 seconds of no changes → final state submitted to API
 ```
 
-**Why?** Without this protection:
-1. User submits thumbs-up → chunks get +0.2
-2. User changes to thumbs-down → chunks get another -0.2
-3. Net effect: chunks were updated twice, scores don't reflect final rating
+**Benefits:**
+- Only the final rating affects RL chunk scores
+- No compounding from accidental double-clicks
+- User can correct mistakes before submission
 
-With protection: Re-submitting feedback updates the stored rating but doesn't re-update chunk scores. This prevents gaming (spam feedback) and accidental double-counting.
+**Implementation:**
+- Frontend stores pending feedback in `localStorage`
+- Timer resets on each interaction (click or typing)
+- Submits after 4 seconds of inactivity
 
 ### Database Schema
 
 ```sql
--- Messages table additions (migration 004):
-ALTER TABLE messages ADD COLUMN style_rating INTEGER;       -- -1, 0, 1, or NULL
-ALTER TABLE messages ADD COLUMN feedback_source VARCHAR(20); -- 'owner' or 'external_user'
-ALTER TABLE messages ADD COLUMN feedback_text TEXT;          -- Optional comment
+-- Messages table additions (migration 004 + 005):
+ALTER TABLE messages ADD COLUMN style_rating INTEGER;            -- -1 or 1 (binary)
+ALTER TABLE messages ADD COLUMN feedback_source VARCHAR(20);     -- 'owner' or 'external_user'
+ALTER TABLE messages ADD COLUMN content_feedback_text TEXT;      -- Note for content rating
+ALTER TABLE messages ADD COLUMN style_feedback_text TEXT;        -- Note for style rating
 ```
 
 ### API Schema
@@ -180,9 +184,10 @@ ALTER TABLE messages ADD COLUMN feedback_text TEXT;          -- Optional comment
 ```python
 # Owner feedback endpoint: POST /chat/message/{id}/feedback
 class SubmitFeedbackRequest(BaseModel):
-    contentRating: int           # Required: -1 or 1
-    styleRating: Optional[int]   # Optional: -1, 0, or 1
-    feedbackText: Optional[str]  # Optional: comment text
+    contentRating: Optional[int]          # Optional: -1 or 1
+    styleRating: Optional[int]            # Optional: -1 or 1 (binary)
+    contentFeedbackText: Optional[str]    # Optional: note for content
+    styleFeedbackText: Optional[str]      # Optional: note for style
     # Note: feedbackSource derived server-side (always 'owner' for this endpoint)
 ```
 

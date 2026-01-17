@@ -201,9 +201,10 @@ class Message(Base):
     feedback_comment = Column(Text, nullable=True)    # Legacy field (unused)
 
     # Enhanced feedback (see docs/RL_OVERVIEW.md)
-    style_rating = Column(Integer, nullable=True)     # Style rating: -1, 0, 1, or null (owner only)
+    style_rating = Column(Integer, nullable=True)     # Style rating: -1 or 1 (binary, owner only)
     feedback_source = Column(String(20), nullable=True)  # 'owner' or 'external_user'
-    feedback_text = Column(Text, nullable=True)       # Optional comment on any feedback
+    content_feedback_text = Column(Text, nullable=True)  # Optional note for content rating
+    style_feedback_text = Column(Text, nullable=True)    # Optional note for style rating
 
     # Performance metrics (for clone messages)
     tokens_used = Column(Integer, nullable=True)

@@ -45,7 +45,8 @@ class ChatMessageResponse(BaseModel):
     feedbackRating: Optional[int] = None
     styleRating: Optional[int] = None
     feedbackSource: Optional[str] = None
-    feedbackText: Optional[str] = None
+    contentFeedbackText: Optional[str] = None
+    styleFeedbackText: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -66,18 +67,20 @@ class SendMessageResponse(BaseModel):
 class SubmitFeedbackRequest(BaseModel):
     """Submit feedback request model (owner-only endpoint)
 
-    Enhanced feedback supports:
-    - Content rating (required): Was the response accurate? (-1 or 1)
-    - Style rating (optional): Does it sound like me? (-1, 0, or 1)
-    - Feedback text (optional): Comment on any feedback
+    Enhanced feedback supports dual-dimension ratings (all optional):
+    - Content rating: Was the response accurate? (-1 or 1)
+    - Style rating: Does it sound like me? (-1 or 1, binary)
+    - Content feedback text: Optional note for content rating
+    - Style feedback text: Optional note for style rating
 
     Note: feedback_source is derived server-side from authentication context.
     This endpoint requires auth, so feedback_source is always 'owner'.
     External user feedback requires a separate public endpoint (TODO).
     """
-    contentRating: int  # Required: -1 (thumbs down) or 1 (thumbs up)
-    styleRating: Optional[int] = None  # Optional: -1, 0, or 1
-    feedbackText: Optional[str] = None  # Optional: comment text
+    contentRating: Optional[int] = None  # Optional: -1 (thumbs down) or 1 (thumbs up)
+    styleRating: Optional[int] = None    # Optional: -1 or 1 (binary)
+    contentFeedbackText: Optional[str] = None  # Optional: note for content rating
+    styleFeedbackText: Optional[str] = None    # Optional: note for style rating
 
 
 class CloneInfoResponse(BaseModel):
@@ -109,7 +112,8 @@ def message_to_response(message: Message) -> ChatMessageResponse:
         feedbackRating=message.feedback_rating,
         styleRating=message.style_rating,
         feedbackSource=message.feedback_source,
-        feedbackText=message.feedback_text,
+        contentFeedbackText=message.content_feedback_text,
+        styleFeedbackText=message.style_feedback_text,
     )
 
 
@@ -262,9 +266,10 @@ async def submit_message_feedback(
 ):
     """Submit enhanced feedback for a clone message (owner-only endpoint).
 
-    Supports dual-dimension feedback:
-    - Content rating: Was the response accurate? (required)
-    - Style rating: Does it sound like me? (optional)
+    Supports dual-dimension feedback (all optional):
+    - Content rating: Was the response accurate? (-1 or 1)
+    - Style rating: Does it sound like me? (-1 or 1, binary)
+    - Content/style feedback text: Optional notes for each rating
 
     Owner feedback is weighted 2x for RL chunk scoring.
 
@@ -286,7 +291,8 @@ async def submit_message_feedback(
             content_rating=request.contentRating,
             feedback_source="owner",  # Derived from auth - this endpoint is owner-only
             style_rating=request.styleRating,
-            feedback_text=request.feedbackText,
+            content_feedback_text=request.contentFeedbackText,
+            style_feedback_text=request.styleFeedbackText,
         )
 
         return None

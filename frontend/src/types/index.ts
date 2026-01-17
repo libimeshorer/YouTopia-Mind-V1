@@ -132,7 +132,22 @@ export interface ChatMessage {
   };
   tokensUsed?: number;
   responseTimeMs?: number;
-  feedbackRating?: number; // -1 (thumbs down), 1 (thumbs up), or null
+  // Feedback fields
+  feedbackRating?: number;        // Content rating: -1, 1, or null
+  styleRating?: number;           // Style rating: -1, 1, or null (binary)
+  feedbackSource?: string;        // 'owner' or 'external_user'
+  contentFeedbackText?: string;   // Note for content rating
+  styleFeedbackText?: string;     // Note for style rating
+}
+
+// Pending feedback stored in localStorage before submission
+export interface PendingFeedback {
+  messageId: string;
+  contentRating?: number;
+  styleRating?: number;
+  contentFeedbackText?: string;
+  styleFeedbackText?: string;
+  timestamp: number;
 }
 
 export interface SendMessageRequest {

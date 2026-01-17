@@ -28,6 +28,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Loader2, Plus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { usePendingFeedback } from "@/hooks/usePendingFeedback";
 
 interface ChatInterfaceProps {
   cloneId: string;
@@ -45,6 +46,16 @@ export const ChatInterface = ({
   const scrollRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
   const { toast } = useToast();
+
+  // Pending feedback hook for batch submission with 4-second delay
+  const {
+    setContentRating,
+    setStyleRating,
+    setContentFeedbackText,
+    setStyleFeedbackText,
+    getPendingFeedback,
+    isSubmitted,
+  } = usePendingFeedback();
 
   // Create or resume session
   const { data: session, isLoading: sessionLoading, error: sessionError, isError: sessionHasError } = useQuery<ChatSession>({
@@ -156,33 +167,7 @@ export const ChatInterface = ({
     },
   });
 
-  // Submit feedback mutation
-  const feedbackMutation = useMutation({
-    mutationFn: ({ messageId, rating }: { messageId: string; rating: number }) =>
-      apiClient.chat.submitFeedback(messageId, rating),
-    onSuccess: (_, variables) => {
-      // Update message in state
-      setMessages((prev) =>
-        prev.map((msg) =>
-          msg.id === variables.messageId
-            ? { ...msg, feedbackRating: variables.rating }
-            : msg
-        )
-      );
-      toast({
-        title: "Feedback submitted",
-        description: "Thank you for your feedback!",
-      });
-    },
-    onError: (error) => {
-      console.error("Feedback submission failed:", error);
-      toast({
-        title: "Error",
-        description: "Failed to submit feedback. Please try again.",
-        variant: "destructive",
-      });
-    },
-  });
+  // Feedback is now handled by usePendingFeedback hook with batch submission
 
   // Auto-scroll to bottom when messages change
   useEffect(() => {
@@ -193,10 +178,6 @@ export const ChatInterface = ({
 
   const handleSend = (content: string) => {
     sendMessageMutation.mutate(content);
-  };
-
-  const handleFeedback = (messageId: string, rating: number) => {
-    feedbackMutation.mutate({ messageId, rating });
   };
 
   const handleNewConversation = async () => {
@@ -298,11 +279,12 @@ export const ChatInterface = ({
                 message={message}
                 isUser={message.role === "external_user"}
                 cloneName={cloneName}
-                onFeedback={
-                  message.role === "clone"
-                    ? (rating) => handleFeedback(message.id, rating)
-                    : undefined
-                }
+                pendingFeedback={getPendingFeedback(message.id)}
+                isSubmitted={isSubmitted(message.id)}
+                onContentRating={(rating) => setContentRating(message.id, rating)}
+                onStyleRating={(rating) => setStyleRating(message.id, rating)}
+                onContentNote={(text) => setContentFeedbackText(message.id, text)}
+                onStyleNote={(text) => setStyleFeedbackText(message.id, text)}
               />
             ))}
             {isTyping && <TypingIndicator />}
