@@ -110,7 +110,7 @@ The feedback system supports dual-dimension ratings and differentiates between f
 
 | Dimension | Who | Values | Purpose |
 |-----------|-----|--------|---------|
-| Content Rating | Everyone | -1, +1 | "Was this response helpful?" |
+| Content Rating | Everyone | -1, +1 | "Was this response accurate?" |
 | Style Rating | Owner only | -1, 0, +1 | "Does this sound like me?" |
 | Feedback Text | Everyone | Free text | Optional correction on negative feedback |
 

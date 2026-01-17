@@ -67,7 +67,7 @@ class SubmitFeedbackRequest(BaseModel):
     """Submit feedback request model (owner-only endpoint)
 
     Enhanced feedback supports:
-    - Content rating (required): Was the response helpful? (-1 or 1)
+    - Content rating (required): Was the response accurate? (-1 or 1)
     - Style rating (optional): Does it sound like me? (-1, 0, or 1)
     - Feedback text (optional): Correction text on negative feedback
 
@@ -263,7 +263,7 @@ async def submit_message_feedback(
     """Submit enhanced feedback for a clone message (owner-only endpoint).
 
     Supports dual-dimension feedback:
-    - Content rating: Was the response helpful? (required)
+    - Content rating: Was the response accurate? (required)
     - Style rating: Does it sound like me? (optional)
 
     Owner feedback is weighted 2x for RL chunk scoring.
