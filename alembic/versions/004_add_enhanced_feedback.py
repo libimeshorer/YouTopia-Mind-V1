@@ -1,7 +1,7 @@
 """add_enhanced_feedback
 
-Revision ID: 003
-Revises: 002
+Revision ID: 004
+Revises: 003
 Create Date: 2025-01-06
 
 Adds enhanced feedback columns to messages table:
@@ -12,8 +12,8 @@ Adds enhanced feedback columns to messages table:
 from alembic import op
 import sqlalchemy as sa
 
-revision = '003'
-down_revision = '002'
+revision = '004'
+down_revision = '003'
 branch_labels = None
 depends_on = None
 

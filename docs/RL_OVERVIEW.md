@@ -50,7 +50,7 @@ User Message
 | Component | File | Purpose |
 |-----------|------|---------|
 | Migration | `alembic/versions/002_add_chunk_scores.py` | Creates `chunk_scores` table |
-| Migration | `alembic/versions/003_add_enhanced_feedback.py` | Adds enhanced feedback columns |
+| Migration | `alembic/versions/004_add_enhanced_feedback.py` | Adds enhanced feedback columns |
 | Model | `src/database/models.py` | `ChunkScore` + `Message` feedback fields |
 | Service | `src/services/chunk_score_service.py` | Score updates (with weight support) |
 | Retriever | `src/rag/retriever.py` | Applies score boosts during retrieval |
@@ -169,7 +169,7 @@ With protection: Re-submitting feedback updates the stored rating but doesn't re
 ### Database Schema
 
 ```sql
--- Messages table additions (migration 003):
+-- Messages table additions (migration 004):
 ALTER TABLE messages ADD COLUMN style_rating INTEGER;       -- -1, 0, 1, or NULL
 ALTER TABLE messages ADD COLUMN feedback_source VARCHAR(20); -- 'owner' or 'external_user'
 ALTER TABLE messages ADD COLUMN feedback_text TEXT;          -- Optional correction
